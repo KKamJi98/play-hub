@@ -1,0 +1,242 @@
+import { useState, useMemo } from "react";
+import { BOARD_SIZE, EMPTY, BLACK, type Stone, type Player } from "./constants";
+import { useTheme } from "../../hooks/useTheme";
+
+interface GomokuBoardProps {
+  board: Stone[][];
+  currentPlayer: Player;
+  lastMove: { row: number; col: number } | null;
+  winningLine: { row: number; col: number }[] | null;
+  gameStatus: "waiting" | "playing" | "finished";
+  aiThinking: boolean;
+  onPlaceStone: (row: number, col: number) => void;
+}
+
+export default function GomokuBoard({
+  board,
+  currentPlayer,
+  lastMove,
+  winningLine,
+  gameStatus,
+  aiThinking,
+  onPlaceStone,
+}: GomokuBoardProps) {
+  const { theme } = useTheme();
+  const [hoverPos, setHoverPos] = useState<{ row: number; col: number } | null>(null);
+
+  const winningSet = useMemo(() => {
+    if (!winningLine) return new Set<string>();
+    return new Set(winningLine.map((p) => `${p.row},${p.col}`));
+  }, [winningLine]);
+
+  const isInteractive = gameStatus === "playing" && !aiThinking;
+  const isDark = theme === "dark";
+
+  // Board dimensions: CSS Grid based on intersection count
+  const cellCount = BOARD_SIZE - 1;
+
+  return (
+    <div className="flex items-center justify-center p-2 sm:p-4">
+      <div
+        className="relative select-none"
+        style={{
+          width: "min(90vw, min(80vh, 600px))",
+          aspectRatio: "1 / 1",
+        }}
+      >
+        {/* Wood background */}
+        <div
+          className="absolute inset-0 rounded-lg"
+          style={{
+            background: isDark
+              ? `linear-gradient(135deg, #a0824a 0%, #b8965c 25%, #a07840 50%, #c4a060 75%, #a0824a 100%)`
+              : `linear-gradient(135deg, #DEB887 0%, #D2B48C 25%, #DEB887 50%, #F5DEB3 75%, #DEB887 100%)`,
+            boxShadow: isDark
+              ? "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)"
+              : "0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.3)",
+          }}
+        />
+
+        {/* Subtle wood grain texture overlay */}
+        <div
+          className="absolute inset-0 rounded-lg opacity-10"
+          style={{
+            background: `repeating-linear-gradient(
+              90deg,
+              transparent,
+              transparent 3px,
+              rgba(0,0,0,0.05) 3px,
+              rgba(0,0,0,0.05) 4px
+            )`,
+          }}
+        />
+
+        {/* Grid area with padding */}
+        <div
+          className="absolute"
+          style={{
+            top: "5%",
+            left: "5%",
+            right: "5%",
+            bottom: "5%",
+          }}
+        >
+          {/* SVG grid lines */}
+          <svg
+            className="absolute inset-0 w-full h-full"
+            viewBox={`0 0 ${cellCount} ${cellCount}`}
+            preserveAspectRatio="xMidYMid meet"
+          >
+            {/* Horizontal lines */}
+            {Array.from({ length: BOARD_SIZE }, (_, i) => (
+              <line
+                key={`h-${i}`}
+                x1={0}
+                y1={i}
+                x2={cellCount}
+                y2={i}
+                stroke={isDark ? "#3d2b0f" : "#5c4a2a"}
+                strokeWidth={i === 0 || i === cellCount ? 0.08 : 0.04}
+              />
+            ))}
+            {/* Vertical lines */}
+            {Array.from({ length: BOARD_SIZE }, (_, i) => (
+              <line
+                key={`v-${i}`}
+                x1={i}
+                y1={0}
+                x2={i}
+                y2={cellCount}
+                stroke={isDark ? "#3d2b0f" : "#5c4a2a"}
+                strokeWidth={i === 0 || i === cellCount ? 0.08 : 0.04}
+              />
+            ))}
+            {/* Star points (hoshi) */}
+            {[
+              [3, 3],
+              [3, 7],
+              [3, 11],
+              [7, 3],
+              [7, 7],
+              [7, 11],
+              [11, 3],
+              [11, 7],
+              [11, 11],
+            ].map(([r, c]) => (
+              <circle
+                key={`star-${r}-${c}`}
+                cx={c}
+                cy={r}
+                r={0.12}
+                fill={isDark ? "#3d2b0f" : "#5c4a2a"}
+              />
+            ))}
+          </svg>
+
+          {/* Intersection click targets & stones */}
+          <div
+            className="absolute inset-0"
+            style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
+              gridTemplateRows: `repeat(${BOARD_SIZE}, 1fr)`,
+            }}
+          >
+            {board.map((row, r) =>
+              row.map((cell, c) => {
+                const isLastMove = lastMove?.row === r && lastMove?.col === c;
+                const isWinning = winningSet.has(`${r},${c}`);
+                const isHovered =
+                  isInteractive && hoverPos?.row === r && hoverPos?.col === c && cell === EMPTY;
+
+                return (
+                  <div
+                    key={`${r}-${c}`}
+                    className="relative flex items-center justify-center"
+                    style={{ cursor: isInteractive && cell === EMPTY ? "pointer" : "default" }}
+                    onClick={() => {
+                      if (isInteractive && cell === EMPTY) {
+                        onPlaceStone(r, c);
+                      }
+                    }}
+                    onMouseEnter={() => {
+                      if (isInteractive && cell === EMPTY) {
+                        setHoverPos({ row: r, col: c });
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      setHoverPos(null);
+                    }}
+                  >
+                    {/* Placed stone */}
+                    {cell !== EMPTY && (
+                      <div
+                        className="absolute rounded-full"
+                        style={{
+                          width: "85%",
+                          height: "85%",
+                          background:
+                            cell === BLACK
+                              ? "radial-gradient(circle at 35% 35%, #555, #111 60%, #000)"
+                              : "radial-gradient(circle at 35% 35%, #fff, #e8e8e8 50%, #ccc)",
+                          boxShadow:
+                            cell === BLACK
+                              ? "2px 2px 4px rgba(0,0,0,0.6)"
+                              : "2px 2px 4px rgba(0,0,0,0.3), inset 0 -1px 2px rgba(0,0,0,0.1)",
+                          animation: isWinning ? "pulse-stone 1s ease-in-out infinite" : undefined,
+                          zIndex: 10,
+                        }}
+                      >
+                        {/* Last move indicator */}
+                        {isLastMove && (
+                          <div
+                            className="absolute inset-0 flex items-center justify-center"
+                          >
+                            <div
+                              className="rounded-full"
+                              style={{
+                                width: "25%",
+                                height: "25%",
+                                background: cell === BLACK ? "#ff4444" : "#ff4444",
+                                boxShadow: "0 0 4px rgba(255,68,68,0.6)",
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Hover preview */}
+                    {isHovered && (
+                      <div
+                        className="absolute rounded-full pointer-events-none"
+                        style={{
+                          width: "85%",
+                          height: "85%",
+                          background:
+                            currentPlayer === BLACK
+                              ? "radial-gradient(circle at 35% 35%, #555, #111 60%, #000)"
+                              : "radial-gradient(circle at 35% 35%, #fff, #e8e8e8 50%, #ccc)",
+                          opacity: 0.4,
+                          zIndex: 5,
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              }),
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Inline keyframes for winning animation */}
+      <style>{`
+        @keyframes pulse-stone {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+        }
+      `}</style>
+    </div>
+  );
+}

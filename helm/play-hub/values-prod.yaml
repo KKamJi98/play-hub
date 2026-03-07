@@ -1,0 +1,10 @@
+# Production overrides
+frontend:
+  replicas: 2
+  image:
+    pullPolicy: Always
+
+backend:
+  replicas: 2
+  image:
+    pullPolicy: Always

@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: play-hub
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kkamji/play-hub.git
+    targetRevision: main
+    path: helm/play-hub
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: play-hub
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

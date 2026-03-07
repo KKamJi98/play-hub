@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "play-hub.fullname" . }}-frontend
+  labels:
+    {{- include "play-hub.labels" . | nindent 4 }}
+    {{- include "play-hub.frontend.selectorLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.frontend.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "play-hub.frontend.selectorLabels" . | nindent 4 }}

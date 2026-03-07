@@ -1,0 +1,13 @@
+Play Hub has been deployed!
+
+{{- if .Values.ingress.enabled }}
+Access the application at:
+  {{- if .Values.ingress.tls.enabled }}
+  https://{{ .Values.ingress.host }}
+  {{- else }}
+  http://{{ .Values.ingress.host }}
+  {{- end }}
+{{- end }}
+
+Frontend: {{ include "play-hub.fullname" . }}-frontend
+Backend:  {{ include "play-hub.fullname" . }}-backend

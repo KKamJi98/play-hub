@@ -1,0 +1,310 @@
+import { useGomokuGame } from "./useGomokuGame";
+import GomokuBoard from "./GomokuBoard";
+import { BLACK, type Difficulty, type GameMode } from "./constants";
+import { useTheme } from "../../hooks/useTheme";
+
+const MODE_OPTIONS: { mode: GameMode; label: string; desc: string }[] = [
+  { mode: "local", label: "로컬 대전", desc: "같은 기기에서 두 명이 번갈아 플레이" },
+  { mode: "ai", label: "AI 대전", desc: "컴퓨터와 대결" },
+  { mode: "online", label: "온라인 대전", desc: "네트워크로 다른 플레이어와 대결" },
+];
+
+const DIFFICULTY_OPTIONS: { value: Difficulty; label: string }[] = [
+  { value: "easy", label: "쉬움" },
+  { value: "medium", label: "보통" },
+  { value: "hard", label: "어려움" },
+];
+
+function ModeSelection({
+  selectedMode,
+  onSelectMode,
+  difficulty,
+  onSelectDifficulty,
+  onStart,
+}: {
+  selectedMode: GameMode;
+  onSelectMode: (mode: GameMode) => void;
+  difficulty: Difficulty;
+  onSelectDifficulty: (d: Difficulty) => void;
+  onStart: () => void;
+}) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
+  return (
+    <div className="flex flex-col items-center gap-8 py-8 px-4">
+      <h1 className="font-display text-4xl font-bold tracking-wider">
+        <span className="bg-gradient-to-r from-[#00f0ff] to-[#ffb800] bg-clip-text text-transparent">
+          오목
+        </span>
+      </h1>
+      <p className="text-[#8892a4] text-center max-w-md">
+        15x15 바둑판 위에 돌을 놓아 가로, 세로, 대각선으로 5개를 연속으로 먼저 만드는 사람이 승리합니다.
+      </p>
+
+      {/* Mode cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-2xl">
+        {MODE_OPTIONS.map(({ mode, label, desc }) => {
+          const isSelected = selectedMode === mode;
+          const isDisabled = mode === "online";
+          return (
+            <button
+              key={mode}
+              onClick={() => !isDisabled && onSelectMode(mode)}
+              disabled={isDisabled}
+              className={`relative flex flex-col items-center gap-2 rounded-xl border p-6 transition-all duration-200
+                ${
+                  isDisabled
+                    ? "opacity-40 cursor-not-allowed border-white/5"
+                    : isSelected
+                      ? isDark
+                        ? "border-[#00f0ff]/50 bg-[#00f0ff]/10 shadow-lg shadow-cyan-500/10"
+                        : "border-blue-400/50 bg-blue-50 shadow-lg shadow-blue-500/10"
+                      : isDark
+                        ? "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10"
+                        : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                }`}
+            >
+              <span
+                className={`font-display text-lg font-semibold tracking-wide ${
+                  isSelected ? "text-[#00f0ff]" : ""
+                }`}
+              >
+                {label}
+              </span>
+              <span className="text-xs text-[#8892a4] text-center">{desc}</span>
+              {isDisabled && (
+                <span className="absolute top-2 right-2 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  준비중
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Difficulty selector (AI mode only) */}
+      {selectedMode === "ai" && (
+        <div className="flex flex-col items-center gap-3">
+          <span className="text-sm font-medium text-[#8892a4]">난이도</span>
+          <div className="flex gap-2">
+            {DIFFICULTY_OPTIONS.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => onSelectDifficulty(value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border
+                  ${
+                    difficulty === value
+                      ? isDark
+                        ? "bg-[#00f0ff]/20 text-[#00f0ff] border-[#00f0ff]/40"
+                        : "bg-blue-100 text-blue-700 border-blue-300"
+                      : isDark
+                        ? "bg-white/5 text-[#8892a4] border-white/10 hover:bg-white/10"
+                        : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Start button */}
+      <button
+        onClick={onStart}
+        className="px-8 py-3 rounded-xl font-display font-semibold tracking-wider text-lg
+                   bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
+                   text-[#0a0e1a] shadow-lg shadow-cyan-500/25
+                   hover:shadow-cyan-500/50 hover:scale-105
+                   transition-all duration-300 active:scale-95"
+      >
+        게임 시작
+      </button>
+    </div>
+  );
+}
+
+function PlayerInfo({
+  currentPlayer,
+  mode,
+  aiThinking,
+}: {
+  currentPlayer: 1 | 2;
+  mode: GameMode;
+  aiThinking: boolean;
+}) {
+  const isBlackTurn = currentPlayer === BLACK;
+  const playerLabel =
+    mode === "ai"
+      ? isBlackTurn
+        ? "당신 (흑)"
+        : "AI (백)"
+      : isBlackTurn
+        ? "Player 1 (흑)"
+        : "Player 2 (백)";
+
+  return (
+    <div className="flex items-center justify-center gap-4 py-3">
+      <div className="flex items-center gap-2">
+        <div
+          className="w-5 h-5 rounded-full"
+          style={{
+            background:
+              currentPlayer === BLACK
+                ? "radial-gradient(circle at 35% 35%, #555, #111 60%, #000)"
+                : "radial-gradient(circle at 35% 35%, #fff, #e8e8e8 50%, #ccc)",
+            boxShadow: currentPlayer === BLACK ? "1px 1px 3px rgba(0,0,0,0.5)" : "1px 1px 3px rgba(0,0,0,0.2)",
+          }}
+        />
+        <span className="font-display text-sm font-semibold tracking-wide">{playerLabel}</span>
+      </div>
+      {aiThinking && (
+        <span className="text-xs text-[#ffb800] animate-pulse font-medium">AI 생각 중...</span>
+      )}
+    </div>
+  );
+}
+
+function GameOverModal({
+  winner,
+  mode,
+  onReset,
+}: {
+  winner: 0 | 1 | 2;
+  mode: GameMode;
+  onReset: () => void;
+}) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
+  let title: string;
+  let subtitle: string;
+
+  if (winner === 0) {
+    title = "무승부!";
+    subtitle = "양 플레이어가 대등한 실력을 보여주었습니다.";
+  } else if (mode === "ai") {
+    if (winner === BLACK) {
+      title = "승리!";
+      subtitle = "축하합니다! AI를 이겼습니다.";
+    } else {
+      title = "패배...";
+      subtitle = "AI가 승리했습니다. 다시 도전해보세요!";
+    }
+  } else {
+    title = winner === BLACK ? "흑 승리!" : "백 승리!";
+    subtitle = `Player ${winner === BLACK ? "1" : "2"}이(가) 5연속 돌을 완성했습니다.`;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div
+        className={`flex flex-col items-center gap-6 rounded-2xl border p-8 max-w-sm w-full mx-4
+          ${
+            isDark
+              ? "bg-[#111827] border-white/10"
+              : "bg-white border-gray-200 shadow-xl"
+          }`}
+      >
+        {/* Winner stone icon */}
+        {winner !== 0 && (
+          <div
+            className="w-16 h-16 rounded-full"
+            style={{
+              background:
+                winner === BLACK
+                  ? "radial-gradient(circle at 35% 35%, #555, #111 60%, #000)"
+                  : "radial-gradient(circle at 35% 35%, #fff, #e8e8e8 50%, #ccc)",
+              boxShadow:
+                winner === BLACK
+                  ? "3px 3px 8px rgba(0,0,0,0.5)"
+                  : "3px 3px 8px rgba(0,0,0,0.2)",
+            }}
+          />
+        )}
+
+        <div className="text-center">
+          <h2 className="font-display text-2xl font-bold tracking-wider">{title}</h2>
+          <p className="mt-2 text-sm text-[#8892a4]">{subtitle}</p>
+        </div>
+
+        <button
+          onClick={onReset}
+          className="px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider
+                     bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
+                     text-[#0a0e1a] shadow-lg shadow-cyan-500/25
+                     hover:shadow-cyan-500/50 hover:scale-105
+                     transition-all duration-300 active:scale-95"
+        >
+          다시 하기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function GomokuPage() {
+  const { state, placeStone, reset, setMode, setDifficulty, startGame } = useGomokuGame();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
+  if (state.gameStatus === "waiting") {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <ModeSelection
+          selectedMode={state.mode}
+          onSelectMode={setMode}
+          difficulty={state.difficulty}
+          onSelectDifficulty={setDifficulty}
+          onStart={startGame}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center pt-4 pb-8 px-4">
+      {/* Top bar */}
+      <div className="w-full max-w-[640px] flex items-center justify-between mb-2">
+        <button
+          onClick={reset}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border
+            ${
+              isDark
+                ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
+                : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
+            }`}
+        >
+          나가기
+        </button>
+
+        <PlayerInfo
+          currentPlayer={state.currentPlayer}
+          mode={state.mode}
+          aiThinking={state.aiThinking}
+        />
+
+        <div className="text-xs text-[#8892a4]">
+          {state.moveHistory.length}수
+        </div>
+      </div>
+
+      {/* Board */}
+      <GomokuBoard
+        board={state.board}
+        currentPlayer={state.currentPlayer}
+        lastMove={state.lastMove}
+        winningLine={state.winningLine}
+        gameStatus={state.gameStatus}
+        aiThinking={state.aiThinking}
+        onPlaceStone={placeStone}
+      />
+
+      {/* Game Over Modal */}
+      {state.gameStatus === "finished" && (
+        <GameOverModal winner={state.winner} mode={state.mode} onReset={reset} />
+      )}
+    </div>
+  );
+}
