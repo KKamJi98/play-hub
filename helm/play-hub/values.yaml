@@ -1,6 +1,6 @@
 frontend:
   image:
-    repository: ghcr.io/kkamji/play-hub-frontend
+    repository: ghcr.io/kkamji98/play-hub-frontend
     tag: latest # frontend-tag
     pullPolicy: IfNotPresent
   replicas: 1
@@ -16,7 +16,7 @@ frontend:
 
 backend:
   image:
-    repository: ghcr.io/kkamji/play-hub-backend
+    repository: ghcr.io/kkamji98/play-hub-backend
     tag: latest # backend-tag
     pullPolicy: IfNotPresent
   replicas: 1

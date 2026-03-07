@@ -6,12 +6,26 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/play-hub-frontend
-  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/play-hub-backend
 
 jobs:
+  prepare:
+    name: Prepare Image Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      image_namespace: ${{ steps.vars.outputs.image_namespace }}
+      frontend_image: ${{ steps.vars.outputs.frontend_image }}
+      backend_image: ${{ steps.vars.outputs.backend_image }}
+    steps:
+      - id: vars
+        run: |
+          OWNER_LC="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          echo "image_namespace=${OWNER_LC}" >> "$GITHUB_OUTPUT"
+          echo "frontend_image=${REGISTRY}/${OWNER_LC}/play-hub-frontend" >> "$GITHUB_OUTPUT"
+          echo "backend_image=${REGISTRY}/${OWNER_LC}/play-hub-backend" >> "$GITHUB_OUTPUT"
+
   build-frontend:
     name: Build & Push Frontend
+    needs: prepare
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,11 +42,12 @@ jobs:
           context: frontend
           push: true
           tags: |
-            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ needs.prepare.outputs.frontend_image }}:${{ github.sha }}
+            ${{ needs.prepare.outputs.frontend_image }}:latest
 
   build-backend:
     name: Build & Push Backend
+    needs: prepare
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,12 +64,12 @@ jobs:
           context: backend
           push: true
           tags: |
-            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ needs.prepare.outputs.backend_image }}:${{ github.sha }}
+            ${{ needs.prepare.outputs.backend_image }}:latest
 
   update-helm-values:
     name: Update Helm Image Tags
-    needs: [build-frontend, build-backend]
+    needs: [prepare, build-frontend, build-backend]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -65,6 +80,9 @@ jobs:
       - name: Update image tags in values.yaml
         run: |
           SHA="${{ github.sha }}"
+          IMAGE_NAMESPACE="${{ needs.prepare.outputs.image_namespace }}"
+          sed -i "s|repository: .*play-hub-frontend|repository: ${REGISTRY}/${IMAGE_NAMESPACE}/play-hub-frontend|" helm/play-hub/values.yaml
+          sed -i "s|repository: .*play-hub-backend|repository: ${REGISTRY}/${IMAGE_NAMESPACE}/play-hub-backend|" helm/play-hub/values.yaml
           sed -i "s|tag: .*# frontend-tag|tag: ${SHA} # frontend-tag|" helm/play-hub/values.yaml
           sed -i "s|tag: .*# backend-tag|tag: ${SHA} # backend-tag|" helm/play-hub/values.yaml
       - name: Commit and push
