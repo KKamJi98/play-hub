@@ -1,8 +1,14 @@
 server:
   port: 8080
-  servlet:
-    context-path: /api
 
 spring:
   application:
     name: play-hub
+
+management:
+  endpoints:
+    web:
+      base-path: /api/actuator
+  endpoint:
+    health:
+      enabled: true

@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { getAll } from "../games/registry";
 import type { GameDefinition } from "../games/types";
 
@@ -66,8 +67,8 @@ function AIBadge() {
 
 function GameCard({ game }: { game: GameDefinition }) {
   return (
-    <a
-      href={`/games/${game.id}`}
+    <Link
+      to={`/games/${game.id}`}
       className="card-glow group relative flex flex-col overflow-hidden rounded-2xl
                  border border-white/10 bg-white/5 backdrop-blur-sm
                  [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-white"
@@ -109,7 +110,7 @@ function GameCard({ game }: { game: GameDefinition }) {
           {game.hasAI && <AIBadge />}
         </div>
       </div>
-    </a>
+    </Link>
   );
 }
 

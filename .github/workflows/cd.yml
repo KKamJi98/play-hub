@@ -73,5 +73,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add helm/play-hub/values.yaml
           git diff --staged --quiet && echo "No changes" && exit 0
-          git commit -m "chore: update image tags to ${{ github.sha }}"
+          git commit -m "chore: update image tags to ${{ github.sha }} [skip ci]"
           git push
