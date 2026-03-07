@@ -43,3 +43,6 @@ logs/
 # Test coverage
 coverage/
 .nyc_output/
+
+# Agent-generated reports
+argocd/.init-agent-md/
