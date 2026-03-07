@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/kkamji/play-hub.git
+    repoURL: https://github.com/KKamJi98/play-hub.git
     targetRevision: main
     path: helm/play-hub
     helm:

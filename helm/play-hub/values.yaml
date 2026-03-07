@@ -3,6 +3,7 @@ frontend:
     repository: ghcr.io/kkamji98/play-hub-frontend
     tag: d4d3b3f20473c1cb59cd8b8282d711f818e9461f # frontend-tag
     pullPolicy: IfNotPresent
+  containerPort: 8080
   replicas: 1
   service:
     port: 80
