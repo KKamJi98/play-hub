@@ -7,12 +7,14 @@ node_modules/
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+frontend/.yarn/install-state.gz
 
 # Build output
 dist/
 build/
 out/
 *.jar
+*.tsbuildinfo
 
 # Gradle
 .gradle/
