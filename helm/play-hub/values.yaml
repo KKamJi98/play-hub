@@ -39,6 +39,8 @@ ingress:
     enabled: true
     clusterIssuer: letsencrypt-prod
   annotations:
+    external-dns.alpha.kubernetes.io/target: "121.130.214.237"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
