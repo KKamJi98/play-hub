@@ -69,7 +69,7 @@ export default function BilliardsCanvas({
       const rect = container.getBoundingClientRect();
       const maxW = rect.width;
       const aspectRatio = TOTAL_W / TOTAL_H;
-      const w = maxW;
+      const w = Math.min(maxW, 1024);
       const h = w / aspectRatio;
       setCanvasSize({ w, h });
       scaleRef.current = w / TOTAL_W;

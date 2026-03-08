@@ -65,6 +65,185 @@ function AIBadge() {
   );
 }
 
+// ---- SVG Thumbnails --------------------------------------------------------
+
+function GomokuThumbnail() {
+  return (
+    <svg viewBox="0 0 160 90" className="h-full w-full">
+      {/* Wood background */}
+      <rect width="160" height="90" fill="#c4944a" />
+      <rect width="160" height="90" fill="url(#wood)" opacity="0.3" />
+      <defs>
+        <pattern id="wood" width="20" height="20" patternUnits="userSpaceOnUse">
+          <line x1="0" y1="0" x2="20" y2="0" stroke="#a07030" strokeWidth="0.5" opacity="0.5" />
+          <line x1="0" y1="5" x2="20" y2="5" stroke="#a07030" strokeWidth="0.3" opacity="0.3" />
+          <line x1="0" y1="10" x2="20" y2="10" stroke="#a07030" strokeWidth="0.5" opacity="0.5" />
+          <line x1="0" y1="15" x2="20" y2="15" stroke="#a07030" strokeWidth="0.3" opacity="0.3" />
+        </pattern>
+      </defs>
+      {/* Grid lines */}
+      {[30, 50, 70, 90, 110, 130].map((x) => (
+        <line key={`v${x}`} x1={x} y1="10" x2={x} y2="80" stroke="#8b6914" strokeWidth="0.7" opacity="0.6" />
+      ))}
+      {[10, 25, 40, 55, 70, 80].map((y) => (
+        <line key={`h${y}`} x1="30" y1={y} x2="130" y2={y} stroke="#8b6914" strokeWidth="0.7" opacity="0.6" />
+      ))}
+      {/* Black stones - diagonal pattern */}
+      <circle cx="50" cy="25" r="7" fill="#1a1a1a" />
+      <circle cx="70" cy="40" r="7" fill="#1a1a1a" />
+      <circle cx="90" cy="55" r="7" fill="#1a1a1a" />
+      <circle cx="110" cy="70" r="7" fill="#1a1a1a" />
+      {/* White stones */}
+      <circle cx="70" cy="25" r="7" fill="#f0f0f0" stroke="#ccc" strokeWidth="0.5" />
+      <circle cx="90" cy="40" r="7" fill="#f0f0f0" stroke="#ccc" strokeWidth="0.5" />
+      <circle cx="50" cy="55" r="7" fill="#f0f0f0" stroke="#ccc" strokeWidth="0.5" />
+      {/* Highlights */}
+      <circle cx="48" cy="23" r="2" fill="white" opacity="0.3" />
+      <circle cx="68" cy="23" r="2" fill="white" opacity="0.4" />
+    </svg>
+  );
+}
+
+function OthelloThumbnail() {
+  return (
+    <svg viewBox="0 0 160 90" className="h-full w-full">
+      {/* Green board */}
+      <rect width="160" height="90" fill="#1b7a3a" />
+      {/* Grid */}
+      {[35, 55, 75, 95, 115].map((x) => (
+        <line key={`v${x}`} x1={x} y1="5" x2={x} y2="85" stroke="#146b2e" strokeWidth="1" />
+      ))}
+      {[5, 25, 45, 65, 85].map((y) => (
+        <line key={`h${y}`} x1="35" y1={y} x2="115" y2={y} stroke="#146b2e" strokeWidth="1" />
+      ))}
+      {/* Discs - classic opening pattern */}
+      <circle cx="65" cy="35" r="8" fill="#f0f0f0" />
+      <circle cx="85" cy="55" r="8" fill="#f0f0f0" />
+      <circle cx="85" cy="35" r="8" fill="#1a1a1a" />
+      <circle cx="65" cy="55" r="8" fill="#1a1a1a" />
+      {/* Flipping hint disc */}
+      <circle cx="45" cy="35" r="8" fill="#1a1a1a" opacity="0.4" />
+      <circle cx="65" cy="15" r="8" fill="#f0f0f0" opacity="0.4" />
+      {/* Extra placed discs */}
+      <circle cx="105" cy="35" r="8" fill="#f0f0f0" />
+      <circle cx="45" cy="55" r="8" fill="#1a1a1a" />
+      {/* Highlights */}
+      <circle cx="63" cy="33" r="2.5" fill="white" opacity="0.35" />
+      <circle cx="83" cy="53" r="2.5" fill="white" opacity="0.35" />
+    </svg>
+  );
+}
+
+function BilliardsThumbnail() {
+  return (
+    <svg viewBox="0 0 160 90" className="h-full w-full">
+      {/* Rail */}
+      <rect width="160" height="90" rx="4" fill="#5d3a1a" />
+      <rect x="3" y="3" width="154" height="84" rx="2" fill="#3e2510" />
+      <rect x="6" y="6" width="148" height="78" rx="1" fill="#5d3a1a" />
+      {/* Felt */}
+      <rect x="12" y="12" width="136" height="66" fill="#1b6e33" />
+      {/* Balls */}
+      <circle cx="50" cy="45" r="7" fill="#ffffff" />
+      <circle cx="48" cy="43" r="2" fill="white" opacity="0.4" />
+      <circle cx="90" cy="35" r="7" fill="#ffd700" />
+      <circle cx="88" cy="33" r="2" fill="white" opacity="0.3" />
+      <circle cx="110" cy="55" r="7" fill="#cc0000" />
+      <circle cx="108" cy="53" r="2" fill="white" opacity="0.3" />
+      <circle cx="120" cy="30" r="7" fill="#cc4400" />
+      <circle cx="118" cy="28" r="2" fill="white" opacity="0.3" />
+      {/* Center line */}
+      <line x1="80" y1="12" x2="80" y2="78" stroke="rgba(255,255,255,0.08)" strokeWidth="0.7" strokeDasharray="4 4" />
+      {/* Diamonds */}
+      <circle cx="40" cy="9" r="1.5" fill="#d4af37" />
+      <circle cx="80" cy="9" r="1.5" fill="#d4af37" />
+      <circle cx="120" cy="9" r="1.5" fill="#d4af37" />
+    </svg>
+  );
+}
+
+function LadderThumbnail() {
+  return (
+    <svg viewBox="0 0 160 90" className="h-full w-full">
+      <rect width="160" height="90" fill="#1e1e2e" />
+      {/* Vertical lines */}
+      <line x1="35" y1="10" x2="35" y2="72" stroke="#6c7086" strokeWidth="2" />
+      <line x1="65" y1="10" x2="65" y2="72" stroke="#6c7086" strokeWidth="2" />
+      <line x1="95" y1="10" x2="95" y2="72" stroke="#6c7086" strokeWidth="2" />
+      <line x1="125" y1="10" x2="125" y2="72" stroke="#6c7086" strokeWidth="2" />
+      {/* Horizontal rungs */}
+      <line x1="35" y1="22" x2="65" y2="22" stroke="#89b4fa" strokeWidth="1.5" opacity="0.7" />
+      <line x1="65" y1="35" x2="95" y2="35" stroke="#f9e2af" strokeWidth="1.5" opacity="0.7" />
+      <line x1="95" y1="48" x2="125" y2="48" stroke="#a6e3a1" strokeWidth="1.5" opacity="0.7" />
+      <line x1="35" y1="55" x2="65" y2="55" stroke="#f38ba8" strokeWidth="1.5" opacity="0.7" />
+      <line x1="65" y1="18" x2="95" y2="18" stroke="#cba6f7" strokeWidth="1.5" opacity="0.7" />
+      <line x1="95" y1="60" x2="125" y2="60" stroke="#89b4fa" strokeWidth="1.5" opacity="0.7" />
+      {/* Bottom dots */}
+      <circle cx="35" cy="80" r="5" fill="#f38ba8" />
+      <circle cx="65" cy="80" r="5" fill="#89b4fa" />
+      <circle cx="95" cy="80" r="5" fill="#a6e3a1" />
+      <circle cx="125" cy="80" r="5" fill="#f9e2af" />
+    </svg>
+  );
+}
+
+function RandomPickerThumbnail() {
+  return (
+    <svg viewBox="0 0 160 90" className="h-full w-full">
+      <rect width="160" height="90" fill="#1e1e2e" />
+      {/* Wheel segments */}
+      <g transform="translate(80, 45)">
+        <circle r="35" fill="none" stroke="#313244" strokeWidth="1" />
+        {[
+          { color: "#f38ba8", start: 0 },
+          { color: "#89b4fa", start: 60 },
+          { color: "#a6e3a1", start: 120 },
+          { color: "#f9e2af", start: 180 },
+          { color: "#cba6f7", start: 240 },
+          { color: "#fab387", start: 300 },
+        ].map(({ color, start }) => {
+          const startRad = (start * Math.PI) / 180;
+          const endRad = ((start + 60) * Math.PI) / 180;
+          const x1 = 35 * Math.cos(startRad);
+          const y1 = 35 * Math.sin(startRad);
+          const x2 = 35 * Math.cos(endRad);
+          const y2 = 35 * Math.sin(endRad);
+          return (
+            <path
+              key={start}
+              d={`M0,0 L${x1},${y1} A35,35 0 0,1 ${x2},${y2} Z`}
+              fill={color}
+              opacity="0.75"
+            />
+          );
+        })}
+        <circle r="6" fill="#1e1e2e" />
+        <circle r="4" fill="#45475a" />
+      </g>
+      {/* Arrow pointer */}
+      <polygon points="120,45 130,40 130,50" fill="#f5e0dc" />
+    </svg>
+  );
+}
+
+const THUMBNAIL_MAP: Record<string, () => React.ReactNode> = {
+  gomoku: GomokuThumbnail,
+  othello: OthelloThumbnail,
+  billiards: BilliardsThumbnail,
+  ladder: LadderThumbnail,
+  "random-picker": RandomPickerThumbnail,
+};
+
+function GameThumbnail({ gameId, fallbackChar }: { gameId: string; fallbackChar: string }) {
+  const Thumb = THUMBNAIL_MAP[gameId];
+  if (Thumb) return <Thumb />;
+  return (
+    <span className="font-display text-3xl font-bold text-white/20">
+      {fallbackChar}
+    </span>
+  );
+}
+
 function GameCard({ game }: { game: GameDefinition }) {
   return (
     <Link
@@ -83,9 +262,7 @@ function GameCard({ game }: { game: GameDefinition }) {
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <span className="font-display text-3xl font-bold text-white/20">
-              {game.nameKo.charAt(0)}
-            </span>
+            <GameThumbnail gameId={game.id} fallbackChar={game.nameKo.charAt(0)} />
           </div>
         )}
         {/* Overlay gradient */}
@@ -216,18 +393,18 @@ export default function HomePage() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative px-4 pt-20 pb-16 sm:px-6 lg:px-8">
+      <section className="relative px-4 pt-12 pb-10 sm:pt-20 sm:pb-16 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl text-center">
           {/* Glowing accent line */}
           <div className="mx-auto mb-8 h-1 w-24 rounded-full bg-gradient-to-r from-[#00f0ff] to-[#0080ff] shadow-lg shadow-cyan-500/50" />
 
-          <h1 className="font-display text-5xl font-black tracking-wider sm:text-6xl lg:text-7xl">
+          <h1 className="font-display text-3xl font-black tracking-wider sm:text-5xl lg:text-6xl xl:text-7xl">
             <span className="bg-gradient-to-r from-[#00f0ff] via-white to-[#ffb800] bg-clip-text text-transparent">
               PLAY HUB
             </span>
           </h1>
 
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-[#8892a4] sm:text-xl">
+          <p className="mx-auto mt-6 max-w-2xl text-sm text-[#8892a4] sm:text-lg">
             친구들과 함께 즐기는 게임 아케이드.
             <br />
             보드 게임부터 물리 퍼즐까지, 다양한 게임을 한 곳에서.
@@ -277,7 +454,7 @@ export default function HomePage() {
           </div>
 
           {/* Grid */}
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {displayGames.map((game) => (
               <GameCard key={game.id} game={game} />
             ))}

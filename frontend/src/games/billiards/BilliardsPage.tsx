@@ -407,7 +407,7 @@ export default function BilliardsPage() {
       </div>
 
       {/* Canvas + Spin Selector */}
-      <div className="flex items-start gap-4 w-full justify-center">
+      <div className="flex items-start gap-4 w-full max-w-5xl mx-auto justify-center">
         <BilliardsCanvas
           balls={state.balls}
           cueBallId={cueBallId}

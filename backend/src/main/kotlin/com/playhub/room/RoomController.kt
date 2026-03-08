@@ -4,11 +4,15 @@ import com.playhub.common.dto.CreateRoomRequest
 import com.playhub.common.dto.RoomResponse
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/rooms")
-class RoomController(private val roomService: RoomService) {
+class RoomController(
+    private val roomService: RoomService,
+    private val messagingTemplate: SimpMessagingTemplate
+) {
 
     @PostMapping
     fun createRoom(@RequestBody request: CreateRoomRequest): ResponseEntity<RoomResponse> {
@@ -56,11 +60,19 @@ class RoomController(private val roomService: RoomService) {
         )
         roomService.joinRoom(id, player)
 
+        val playersList = room.players.map {
+            mapOf("sessionId" to it.sessionId, "nickname" to it.nickname, "index" to it.index)
+        }
+
+        // WebSocket broadcast - notify host about new player
+        messagingTemplate.convertAndSend(
+            "/topic/room/$id",
+            mapOf("type" to "PLAYER_JOINED", "players" to playersList)
+        )
+
         return ResponseEntity.ok(mapOf(
             "playerIndex" to playerIndex,
-            "players" to room.players.map {
-                mapOf("sessionId" to it.sessionId, "nickname" to it.nickname, "index" to it.index)
-            }
+            "players" to playersList
         ))
     }
 }
