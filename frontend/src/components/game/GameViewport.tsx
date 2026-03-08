@@ -32,9 +32,9 @@ export default function GameViewport({
     <section
       ref={containerRef}
       aria-label={title}
-      className={`relative isolate flex overflow-hidden ${
+      className={`relative isolate flex ${
         isFallbackFullscreen
-          ? "fixed inset-0 z-[100] min-h-screen"
+          ? "fixed inset-0 z-[100] min-h-[100dvh]"
           : "min-h-[calc(100dvh-4rem)]"
       }`}
     >
@@ -48,7 +48,12 @@ export default function GameViewport({
         }}
       />
 
-      <div className="relative mx-auto flex w-full flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6" style={shellStyle}>
+      <div
+        className={`relative mx-auto flex w-full flex-1 flex-col px-4 py-4 sm:px-6 sm:py-6 ${
+          isFullscreen ? "min-h-full overflow-y-auto overscroll-contain" : "overflow-hidden"
+        }`}
+        style={shellStyle}
+      >
         <div className="pointer-events-none absolute right-4 top-4 z-20 flex flex-wrap justify-end gap-2 sm:right-6 sm:top-6">
           <div className="pointer-events-auto">
             <DisplayScaleControl variant="rail" />

@@ -39,6 +39,15 @@ const RAIL_COLOR = "#5d3a1a";
 const RAIL_DARK = "#3e2510";
 const DIAMOND_COLOR = "#d4af37";
 
+function cloneBalls(source: Ball[]): Ball[] {
+  return source.map((ball) => ({
+    ...ball,
+    pos: new Vec2(ball.pos.x, ball.pos.y),
+    vel: new Vec2(ball.vel.x, ball.vel.y),
+    omega: { x: ball.omega.x, y: ball.omega.y, z: ball.omega.z },
+  }));
+}
+
 // ---- Ray-circle intersection -----------------------------------------------
 
 /**
@@ -153,12 +162,42 @@ export default function BilliardsCanvas({
 
   // Mutable balls for physics (engine mutates in place)
   const simBallsRef = useRef<Ball[]>([]);
+  const propBallsRef = useRef<Ball[]>(balls);
+  const phaseRef = useRef<Props["phase"]>(phase);
+  const cueBallIdRef = useRef<BallId>(cueBallId);
+  const aimPowerRef = useRef(aimPower);
+  const aimDirectionRef = useRef<Vec2 | null>(aimDirection);
+  const onPhysicsFrameRef = useRef(onPhysicsFrame);
 
   // Scale factor: canvas pixels → internal units
   const scaleRef = useRef(1);
   const activePointerIdRef = useRef<number | null>(null);
   const simulationCarryRef = useRef(0);
   const lastFrameTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    propBallsRef.current = balls;
+  }, [balls]);
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  useEffect(() => {
+    cueBallIdRef.current = cueBallId;
+  }, [cueBallId]);
+
+  useEffect(() => {
+    aimPowerRef.current = aimPower;
+  }, [aimPower]);
+
+  useEffect(() => {
+    aimDirectionRef.current = aimDirection;
+  }, [aimDirection]);
+
+  useEffect(() => {
+    onPhysicsFrameRef.current = onPhysicsFrame;
+  }, [onPhysicsFrame]);
 
   // ---- Responsive resize ---------------------------------------------------
 
@@ -205,23 +244,19 @@ export default function BilliardsCanvas({
 
   useEffect(() => {
     if (phase === "rolling") {
-      // Deep-clone state balls for mutable simulation
-      simBallsRef.current = balls.map((b) => ({
-        ...b,
-        pos: new Vec2(b.pos.x, b.pos.y),
-        vel: new Vec2(b.vel.x, b.vel.y),
-        omega: { x: b.omega.x, y: b.omega.y, z: b.omega.z },
-      }));
+      simBallsRef.current = cloneBalls(propBallsRef.current);
+    } else {
+      simBallsRef.current = [];
     }
     simulationCarryRef.current = 0;
     lastFrameTimeRef.current = null;
-  }, [phase, balls]);
+  }, [phase]);
 
   // ---- Mouse / touch handlers — direction only -----------------------------
 
   const getCueBall = useCallback((): Ball | undefined => {
-    return balls.find((b) => b.id === cueBallId);
-  }, [balls, cueBallId]);
+    return propBallsRef.current.find((ball) => ball.id === cueBallIdRef.current);
+  }, []);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -298,7 +333,12 @@ export default function BilliardsCanvas({
       ctx.setTransform(s * dpr, 0, 0, s * dpr, 0, 0);
 
       // -- Physics step (only while rolling) --------------------------------
-      let currentBalls = balls;
+      const phase = phaseRef.current;
+      const cueBallId = cueBallIdRef.current;
+      const aimDirection = aimDirectionRef.current;
+      const aimPower = aimPowerRef.current;
+
+      let currentBalls = propBallsRef.current;
       if (phase === "rolling" && simBallsRef.current.length > 0) {
         const previousTimestamp = lastFrameTimeRef.current;
         const deltaSeconds =
@@ -324,7 +364,7 @@ export default function BilliardsCanvas({
           }
         }
 
-        onPhysicsFrame(simBallsRef.current, result.cueBallHits, stopped);
+        onPhysicsFrameRef.current(simBallsRef.current, result.cueBallHits, stopped);
         currentBalls = simBallsRef.current;
       } else {
         lastFrameTimeRef.current = timestamp;
@@ -387,7 +427,7 @@ export default function BilliardsCanvas({
 
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [canvasSize, balls, phase, cueBallId, aimPower, aimDirection, onPhysicsFrame]);
+  }, [canvasSize]);
 
   return (
     <div ref={containerRef} className="w-full">
