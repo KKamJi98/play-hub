@@ -2,8 +2,8 @@ import type { Ball, BallPhase } from "./ball";
 import { isMoving } from "./ball";
 import { resolveBallBall, resolveBallCushion } from "./collision";
 import {
-  SUB_STEPS,
   PHYSICS_DT,
+  MAX_SIMULATION_STEPS_PER_TICK,
   R,
   g,
   MU_S,
@@ -20,6 +20,8 @@ import { Vec2 } from "./vector";
 export interface StepResult {
   /** Set of ball ids that the cue ball collided with during this frame. */
   cueBallHits: Set<BallId>;
+  carrySeconds: number;
+  simulatedSteps: number;
 }
 
 // ---- Slip velocity 3-phase integration ------------------------------------
@@ -169,35 +171,58 @@ function integrateBall(ball: Ball, dt: number): void {
  * Internally runs SUB_STEPS iterations for stability.
  * `cueBallId` indicates which ball is the active cue ball this turn.
  */
-export function step(balls: Ball[], cueBallId: BallId): StepResult {
-  const cueBallHits = new Set<BallId>();
+function runPhysicsSubStep(balls: Ball[], cueBallId: BallId, cueBallHits: Set<BallId>): void {
+  // Integrate each ball
+  for (const ball of balls) {
+    integrateBall(ball, PHYSICS_DT);
+  }
 
-  for (let s = 0; s < SUB_STEPS; s++) {
-    // Integrate each ball
-    for (const ball of balls) {
-      integrateBall(ball, PHYSICS_DT);
-    }
-
-    // Ball-ball collisions
-    for (let i = 0; i < balls.length; i++) {
-      for (let j = i + 1; j < balls.length; j++) {
-        const a = balls[i]!;
-        const b = balls[j]!;
-        const hit = resolveBallBall(a, b);
-        if (hit) {
-          if (a.id === cueBallId) cueBallHits.add(b.id);
-          if (b.id === cueBallId) cueBallHits.add(a.id);
-        }
+  // Ball-ball collisions
+  for (let i = 0; i < balls.length; i++) {
+    for (let j = i + 1; j < balls.length; j++) {
+      const a = balls[i]!;
+      const b = balls[j]!;
+      const hit = resolveBallBall(a, b);
+      if (hit) {
+        if (a.id === cueBallId) cueBallHits.add(b.id);
+        if (b.id === cueBallId) cueBallHits.add(a.id);
       }
-    }
-
-    // Cushion collisions
-    for (const ball of balls) {
-      resolveBallCushion(ball);
     }
   }
 
-  return { cueBallHits };
+  // Cushion collisions
+  for (const ball of balls) {
+    resolveBallCushion(ball);
+  }
+}
+
+export function advanceSimulation(
+  balls: Ball[],
+  cueBallId: BallId,
+  deltaSeconds: number,
+  carrySeconds = 0,
+): StepResult {
+  const cueBallHits = new Set<BallId>();
+  let availableTime = Math.max(0, carrySeconds + deltaSeconds);
+  let simulatedSteps = 0;
+  const maxTickTime = PHYSICS_DT * MAX_SIMULATION_STEPS_PER_TICK;
+
+  availableTime = Math.min(availableTime, maxTickTime);
+
+  while (
+    availableTime >= PHYSICS_DT &&
+    simulatedSteps < MAX_SIMULATION_STEPS_PER_TICK
+  ) {
+    runPhysicsSubStep(balls, cueBallId, cueBallHits);
+    availableTime -= PHYSICS_DT;
+    simulatedSteps += 1;
+  }
+
+  return {
+    cueBallHits,
+    carrySeconds: availableTime,
+    simulatedSteps,
+  };
 }
 
 /** True when every ball has effectively stopped. */

@@ -78,15 +78,22 @@ function powerToVelocity(power: number): number {
 
 /**
  * Convert SpinSelector output (Vec2 in [-1,1]) to omega {x, y, z}.
- * - spin.x (left/right on selector) → omega.z (sidespin)
- * - spin.y (up/down) → omega.y (topspin/backspin)
- *   spin.y negative (top of selector) = topspin, spin.y positive = backspin
+ * - spin.x (left/right on selector) → omega.z (sidespin / english)
+ * - spin.y (up/down on selector) applies follow / draw along the shot axis
  */
-function spinToOmega(spin: Vec2): { x: number; y: number; z: number } {
+export function spinToOmega(direction: Vec2, spin: Vec2): { x: number; y: number; z: number } {
+  if (direction.length() < 0.0001) {
+    return { x: 0, y: 0, z: 0 };
+  }
+
+  const dir = direction.normalize();
+  const rollAxis = new Vec2(-dir.y, dir.x);
+  const followDrawOmega = -spin.y * MAX_SPIN_OMEGA;
+
   return {
-    x: 0, // not directly controlled by selector
-    y: -spin.y * MAX_SPIN_OMEGA, // negative spin.y = topspin = positive omega.y (forward roll in x)
-    z: spin.x * MAX_SPIN_OMEGA,  // positive spin.x = clockwise sidespin
+    x: rollAxis.x * followDrawOmega,
+    y: rollAxis.y * followDrawOmega,
+    z: spin.x * MAX_SPIN_OMEGA,
   };
 }
 
@@ -103,7 +110,7 @@ function applyShot(
   const velocityMag = powerToVelocity(power);
   const dir = direction.normalize();
   const vel = new Vec2(dir.x * velocityMag, dir.y * velocityMag);
-  const omega = spinToOmega(spin);
+  const omega = spinToOmega(dir, spin);
 
   return balls.map((b) => {
     if (b.id !== cueBallId) return b;

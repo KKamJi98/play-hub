@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import type { Ball } from "./physics/ball";
-import { step, allStopped } from "./physics/engine";
+import { advanceSimulation, allStopped } from "./physics/engine";
 import { Vec2 } from "./physics/vector";
 import {
   TABLE_WIDTH,
@@ -8,6 +8,8 @@ import {
   CUSHION_WIDTH,
 } from "./constants";
 import type { BallId } from "./constants";
+import { useDisplaySettings } from "../../hooks/useDisplaySettings";
+import { useCoarsePointer } from "../../hooks/useCoarsePointer";
 
 // ---- Props -----------------------------------------------------------------
 
@@ -140,6 +142,8 @@ export default function BilliardsCanvas({
   onPhysicsFrame,
   disabled = false,
 }: Props) {
+  const { displayScale } = useDisplaySettings();
+  const isCoarsePointer = useCoarsePointer();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 450 });
@@ -152,6 +156,9 @@ export default function BilliardsCanvas({
 
   // Scale factor: canvas pixels → internal units
   const scaleRef = useRef(1);
+  const activePointerIdRef = useRef<number | null>(null);
+  const simulationCarryRef = useRef(0);
+  const lastFrameTimeRef = useRef<number | null>(null);
 
   // ---- Responsive resize ---------------------------------------------------
 
@@ -161,9 +168,13 @@ export default function BilliardsCanvas({
 
     const observe = () => {
       const rect = container.getBoundingClientRect();
-      const maxW = rect.width;
       const aspectRatio = TOTAL_W / TOTAL_H;
-      const w = Math.min(maxW, 1024);
+      const maxW = rect.width;
+      const maxCanvasWidth = Math.round(1240 * Math.min(displayScale, 1.15));
+      const mobileHeightRatio = window.innerWidth < 768 ? 0.5 : 0.72;
+      const maxHeight = Math.max(280, window.innerHeight * mobileHeightRatio);
+      const widthFromHeight = maxHeight * aspectRatio;
+      const w = Math.max(280, Math.min(maxW, maxCanvasWidth, widthFromHeight));
       const h = w / aspectRatio;
       setCanvasSize({ w, h });
       scaleRef.current = w / TOTAL_W;
@@ -173,7 +184,7 @@ export default function BilliardsCanvas({
     const ro = new ResizeObserver(observe);
     ro.observe(container);
     return () => ro.disconnect();
-  }, []);
+  }, [displayScale]);
 
   // ---- Coordinate conversion -----------------------------------------------
 
@@ -202,6 +213,8 @@ export default function BilliardsCanvas({
         omega: { x: b.omega.x, y: b.omega.y, z: b.omega.z },
       }));
     }
+    simulationCarryRef.current = 0;
+    lastFrameTimeRef.current = null;
   }, [phase, balls]);
 
   // ---- Mouse / touch handlers — direction only -----------------------------
@@ -218,22 +231,23 @@ export default function BilliardsCanvas({
       if (!cue) return;
 
       // Must click near cue ball to start aiming
-      if (pt.distance(cue.pos) > cue.radius * 4) return;
+      if (pt.distance(cue.pos) > cue.radius * (isCoarsePointer ? 7 : 4)) return;
 
       aimingRef.current = true;
+      activePointerIdRef.current = e.pointerId;
       // Initial direction: from cue ball toward mouse
       const dir = pt.sub(cue.pos);
       if (dir.length() > 0.1) {
         onAimChange(cue.pos.sub(pt).normalize());
       }
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      e.currentTarget.setPointerCapture(e.pointerId);
     },
-    [phase, disabled, canvasToTable, getCueBall, onAimChange],
+    [phase, disabled, canvasToTable, getCueBall, isCoarsePointer, onAimChange],
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (!aimingRef.current) return;
+      if (!aimingRef.current || activePointerIdRef.current !== e.pointerId) return;
       const pt = canvasToTable(e.clientX, e.clientY);
       const cue = getCueBall();
       if (!cue) return;
@@ -246,9 +260,10 @@ export default function BilliardsCanvas({
     [canvasToTable, getCueBall, onAimChange],
   );
 
-  const handlePointerUp = useCallback(() => {
-    if (!aimingRef.current) return;
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    if (!aimingRef.current || activePointerIdRef.current !== e.pointerId) return;
     aimingRef.current = false;
+    activePointerIdRef.current = null;
     // Direction stays set (aimDirection in parent) — user can adjust spin/power then fire
   }, []);
 
@@ -274,7 +289,7 @@ export default function BilliardsCanvas({
 
     let raf: number;
 
-    const draw = () => {
+    const draw = (timestamp: number) => {
       const s = scaleRef.current;
       const dpr = window.devicePixelRatio || 1;
 
@@ -285,7 +300,20 @@ export default function BilliardsCanvas({
       // -- Physics step (only while rolling) --------------------------------
       let currentBalls = balls;
       if (phase === "rolling" && simBallsRef.current.length > 0) {
-        const result = step(simBallsRef.current, cueBallId);
+        const previousTimestamp = lastFrameTimeRef.current;
+        const deltaSeconds =
+          previousTimestamp === null
+            ? 0
+            : Math.min((timestamp - previousTimestamp) / 1000, 0.05);
+        lastFrameTimeRef.current = timestamp;
+
+        const result = advanceSimulation(
+          simBallsRef.current,
+          cueBallId,
+          deltaSeconds,
+          simulationCarryRef.current,
+        );
+        simulationCarryRef.current = result.carrySeconds;
         let stopped = allStopped(simBallsRef.current);
 
         // Safety: force stop after 10 seconds of rolling
@@ -298,6 +326,9 @@ export default function BilliardsCanvas({
 
         onPhysicsFrame(simBallsRef.current, result.cueBallHits, stopped);
         currentBalls = simBallsRef.current;
+      } else {
+        lastFrameTimeRef.current = timestamp;
+        simulationCarryRef.current = 0;
       }
 
       // -- Draw table -------------------------------------------------------
@@ -362,11 +393,16 @@ export default function BilliardsCanvas({
     <div ref={containerRef} className="w-full">
       <canvas
         ref={canvasRef}
-        style={{ width: canvasSize.w, height: canvasSize.h, cursor: phase === "aiming" && !disabled ? "crosshair" : "default" }}
+        style={{
+          width: canvasSize.w,
+          height: canvasSize.h,
+          cursor: phase === "aiming" && !disabled ? "crosshair" : "default",
+        }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        className="rounded-lg shadow-2xl"
+        onPointerCancel={handlePointerUp}
+        className="touch-drag-surface rounded-[28px] shadow-2xl"
       />
     </div>
   );

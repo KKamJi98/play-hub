@@ -14,6 +14,7 @@
 
   --font-display: "Orbitron", sans-serif;
   --font-body: "Outfit", sans-serif;
+  --ui-scale: 1;
 }
 
 /* ===== Base Styles ===== */
@@ -31,6 +32,13 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
 /* ===== Dark Theme (default) ===== */
@@ -116,6 +124,17 @@ body {
   );
   background-size: 400% 400%;
   animation: gradient-shift 15s ease infinite;
+}
+
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-drag-surface {
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
 [data-theme="light"] .gradient-mesh {

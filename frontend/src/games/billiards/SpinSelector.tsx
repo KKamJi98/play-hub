@@ -2,6 +2,8 @@ import { useCallback, useRef } from "react";
 import { Vec2 } from "./physics/vector";
 import { MAX_SPIN } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
+import { useCoarsePointer } from "../../hooks/useCoarsePointer";
+import { useDisplaySettings } from "../../hooks/useDisplaySettings";
 
 interface SpinSelectorProps {
   spin: Vec2;
@@ -10,10 +12,15 @@ interface SpinSelectorProps {
 
 export default function SpinSelector({ spin, onSpinChange }: SpinSelectorProps) {
   const { theme } = useTheme();
+  const { displayScale } = useDisplaySettings();
+  const isCoarsePointer = useCoarsePointer();
   const isDark = theme === "dark";
   const containerRef = useRef<HTMLDivElement>(null);
+  const activePointerIdRef = useRef<number | null>(null);
 
-  const SIZE = 80;
+  const SIZE = Math.round(
+    (isCoarsePointer ? 104 : 88) * Math.min(displayScale, 1.12),
+  );
   const RADIUS = SIZE / 2;
 
   const handlePointer = useCallback(
@@ -36,7 +43,8 @@ export default function SpinSelector({ spin, onSpinChange }: SpinSelectorProps) 
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      activePointerIdRef.current = e.pointerId;
+      e.currentTarget.setPointerCapture(e.pointerId);
       handlePointer(e);
     },
     [handlePointer],
@@ -44,11 +52,16 @@ export default function SpinSelector({ spin, onSpinChange }: SpinSelectorProps) 
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (e.buttons === 0) return;
+      if (activePointerIdRef.current !== e.pointerId) return;
       handlePointer(e);
     },
     [handlePointer],
   );
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    if (activePointerIdRef.current !== e.pointerId) return;
+    activePointerIdRef.current = null;
+  }, []);
 
   // Dot position: spin normalized to pixel offset
   const dotX = (spin.x / MAX_SPIN) * RADIUS;
@@ -59,7 +72,7 @@ export default function SpinSelector({ spin, onSpinChange }: SpinSelectorProps) 
       <span className="text-[10px] font-medium text-[#8892a4]">당점</span>
       <div
         ref={containerRef}
-        className="relative cursor-crosshair rounded-full border"
+        className="touch-drag-surface relative cursor-crosshair rounded-full border"
         style={{
           width: SIZE,
           height: SIZE,
@@ -71,6 +84,8 @@ export default function SpinSelector({ spin, onSpinChange }: SpinSelectorProps) 
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
         {/* Crosshair */}
         <div
@@ -109,7 +124,7 @@ export default function SpinSelector({ spin, onSpinChange }: SpinSelectorProps) 
       </div>
       <button
         onClick={() => onSpinChange(Vec2.zero())}
-        className={`text-[10px] px-2 py-0.5 rounded transition-all ${
+        className={`touch-manipulation text-[10px] px-2 py-0.5 rounded transition-all ${
           isDark
             ? "text-[#8892a4] hover:text-white"
             : "text-gray-500 hover:text-gray-700"

@@ -1,6 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { BOARD_SIZE, EMPTY, BLACK, type Stone, type Player } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
+import { useCoarsePointer } from "../../hooks/useCoarsePointer";
+import { useDisplaySettings } from "../../hooks/useDisplaySettings";
 
 interface OthelloBoardProps {
   board: Stone[][];
@@ -24,6 +26,8 @@ export default function OthelloBoard({
   onPlaceStone,
 }: OthelloBoardProps) {
   const { theme } = useTheme();
+  const { displayScale } = useDisplaySettings();
+  const isCoarsePointer = useCoarsePointer();
   const [hoverPos, setHoverPos] = useState<{ row: number; col: number } | null>(null);
 
   // Track flipped stones for animation
@@ -52,13 +56,31 @@ export default function OthelloBoard({
 
   const isInteractive = gameStatus === "playing" && !aiThinking;
   const isDark = theme === "dark";
+  const boardMaxSize = Math.round(860 * Math.min(displayScale, 1.15));
+
+  const activateCell = (row: number, col: number, canClick: boolean) => {
+    if (!canClick) return;
+
+    if (isCoarsePointer) {
+      if (hoverPos?.row === row && hoverPos?.col === col) {
+        onPlaceStone(row, col);
+        setHoverPos(null);
+        return;
+      }
+
+      setHoverPos({ row, col });
+      return;
+    }
+
+    onPlaceStone(row, col);
+  };
 
   return (
     <div className="flex items-center justify-center p-2 sm:p-4">
       <div
-        className="relative select-none"
+        className="touch-manipulation relative select-none"
         style={{
-          width: "min(90vw, 80vh)",
+          width: `min(100%, 92vw, 88dvh, ${boardMaxSize}px)`,
           aspectRatio: "1 / 1",
         }}
       >
@@ -131,17 +153,17 @@ export default function OthelloBoard({
                       cursor: canClick ? "pointer" : "default",
                     }}
                     onClick={() => {
-                      if (canClick) {
-                        onPlaceStone(r, c);
-                      }
+                      activateCell(r, c, canClick);
                     }}
                     onMouseEnter={() => {
-                      if (canClick) {
+                      if (!isCoarsePointer && canClick) {
                         setHoverPos({ row: r, col: c });
                       }
                     }}
                     onMouseLeave={() => {
-                      setHoverPos(null);
+                      if (!isCoarsePointer) {
+                        setHoverPos(null);
+                      }
                     }}
                   >
                     {/* Placed stone */}

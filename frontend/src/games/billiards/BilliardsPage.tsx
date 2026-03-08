@@ -8,6 +8,9 @@ import type { BallId } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
 import { useOnlineGame } from "../../hooks/useOnlineGame";
 import OnlineLobby from "../../components/online/OnlineLobby";
+import GameViewport from "../../components/game/GameViewport";
+import { useCoarsePointer } from "../../hooks/useCoarsePointer";
+import { useDisplaySettings } from "../../hooks/useDisplaySettings";
 
 // ---- Mode options ----------------------------------------------------------
 
@@ -62,7 +65,7 @@ function ModeSelection({
             <button
               key={mode}
               onClick={() => onSelectMode(mode)}
-              className={`relative flex flex-col items-center gap-2 rounded-xl border p-6 transition-all duration-200
+              className={`touch-manipulation relative flex flex-col items-center gap-2 rounded-xl border p-6 transition-all duration-200
                 ${
                   isSelected
                     ? isDark
@@ -94,7 +97,7 @@ function ModeSelection({
             <button
               key={score}
               onClick={() => onSelectTargetScore(score)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border
+              className={`touch-manipulation px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border
                 ${
                   targetScore === score
                     ? isDark
@@ -114,7 +117,7 @@ function ModeSelection({
       {/* Start button */}
       <button
         onClick={onStart}
-        className="px-8 py-3 rounded-xl font-display font-semibold tracking-wider text-lg
+        className="touch-manipulation px-8 py-3 rounded-xl font-display font-semibold tracking-wider text-lg
                    bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
                    text-[#0a0e1a] shadow-lg shadow-cyan-500/25
                    hover:shadow-cyan-500/50 hover:scale-105
@@ -144,7 +147,7 @@ function ScoreBoard({
   ];
 
   return (
-    <div className="flex items-center gap-6">
+    <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6">
       {players.map(({ label, color, idx }) => (
         <div
           key={idx}
@@ -290,8 +293,11 @@ function PowerSlider({
   onChange: (v: number) => void;
 }) {
   const { theme } = useTheme();
+  const { displayScale } = useDisplaySettings();
+  const isCoarsePointer = useCoarsePointer();
   const isDark = theme === "dark";
   const trackRef = useRef<HTMLDivElement>(null);
+  const activePointerIdRef = useRef<number | null>(null);
 
   const handlePointer = useCallback(
     (e: React.PointerEvent) => {
@@ -308,7 +314,8 @@ function PowerSlider({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      activePointerIdRef.current = e.pointerId;
+      e.currentTarget.setPointerCapture(e.pointerId);
       handlePointer(e);
     },
     [handlePointer],
@@ -316,14 +323,23 @@ function PowerSlider({
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (e.buttons === 0) return;
+      if (activePointerIdRef.current !== e.pointerId) return;
       handlePointer(e);
     },
     [handlePointer],
   );
 
-  const TRACK_H = 140;
-  const TRACK_W = 24;
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    if (activePointerIdRef.current !== e.pointerId) return;
+    activePointerIdRef.current = null;
+  }, []);
+
+  const TRACK_H = Math.round(
+    (isCoarsePointer ? 176 : 152) * Math.min(displayScale, 1.1),
+  );
+  const TRACK_W = Math.round(
+    (isCoarsePointer ? 34 : 28) * Math.min(displayScale, 1.08),
+  );
   const fillRatio = value / 100;
 
   // Color based on power level
@@ -338,7 +354,7 @@ function PowerSlider({
       <span className="text-[10px] font-medium text-[#8892a4]">파워</span>
       <div
         ref={trackRef}
-        className="relative cursor-pointer rounded-full border"
+        className="touch-drag-surface relative cursor-pointer rounded-full border"
         style={{
           width: TRACK_W,
           height: TRACK_H,
@@ -347,6 +363,8 @@ function PowerSlider({
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
         {/* Filled portion (from bottom) */}
         <div
@@ -400,6 +418,7 @@ export default function BilliardsPage() {
 
   const online = useOnlineGame("billiards", { onGameStarted: startGame });
   const { theme } = useTheme();
+  const isCoarsePointer = useCoarsePointer();
   const isDark = theme === "dark";
 
   const cueBallId: BallId =
@@ -411,6 +430,13 @@ export default function BilliardsPage() {
   const myPlayerIndex = online.state.playerIndex;
   const isMyTurn = !isOnlineMode || state.currentPlayer === myPlayerIndex;
   const canAim = state.phase === "aiming" && isMyTurn;
+
+  const handleReset = useCallback(() => {
+    if (state.mode === "online") {
+      online.leaveRoom();
+    }
+    reset();
+  }, [online, reset, state.mode]);
 
   // ---- Shoot handler (called from "발사" button) ----------------------------
 
@@ -508,179 +534,272 @@ export default function BilliardsPage() {
 
   if (state.mode === "online" && state.phase === "setup") {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          {online.state.phase !== "playing" ? (
-            <>
-              <button
-                onClick={() => { setMode("local"); }}
-                className={`self-start px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
-                  isDark
-                    ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
-                    : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
-                }`}
-              >
-                뒤로
-              </button>
-              <OnlineLobby
-                state={online.state}
-                connected={online.connected}
-                gameLabel="4구 당구 - 캐롬 당구 온라인 대전"
-                onSetNickname={online.setNickname}
-                onConfirmNickname={online.confirmNickname}
-                onCreateRoom={online.createRoom}
-                onJoinRoom={online.joinRoom}
-                onStartGame={() => { online.startGame(); startGame(); }}
-                onLeaveRoom={online.leaveRoom}
+      <GameViewport title="4구 당구" maxWidth={1200}>
+        <div className="flex flex-1 items-center justify-center py-6 sm:py-8">
+          <div className="flex flex-col items-center gap-4">
+            {online.state.phase !== "playing" ? (
+              <>
+                <button
+                  onClick={() => { setMode("local"); }}
+                  className={`touch-manipulation self-start px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
+                    isDark
+                      ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
+                      : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  뒤로
+                </button>
+                <OnlineLobby
+                  state={online.state}
+                  connected={online.connected}
+                  gameLabel="4구 당구 - 캐롬 당구 온라인 대전"
+                  onSetNickname={online.setNickname}
+                  onConfirmNickname={online.confirmNickname}
+                  onCreateRoom={online.createRoom}
+                  onJoinRoom={online.joinRoom}
+                  onStartGame={() => { online.startGame(); startGame(); }}
+                  onLeaveRoom={online.leaveRoom}
+                />
+              </>
+            ) : (
+              <ModeSelection
+                selectedMode={state.mode}
+                targetScore={state.targetScore}
+                onSelectMode={setMode}
+                onSelectTargetScore={setTargetScore}
+                onStart={startGame}
               />
-            </>
-          ) : (
-            <ModeSelection
-              selectedMode={state.mode}
-              targetScore={state.targetScore}
-              onSelectMode={setMode}
-              onSelectTargetScore={setTargetScore}
-              onStart={startGame}
-            />
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      </GameViewport>
     );
   }
 
   if (state.phase === "setup") {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
-        <ModeSelection
-          selectedMode={state.mode}
-          targetScore={state.targetScore}
-          onSelectMode={setMode}
-          onSelectTargetScore={setTargetScore}
-          onStart={startGame}
-        />
-      </div>
+      <GameViewport title="4구 당구" maxWidth={1200}>
+        <div className="flex flex-1 items-center justify-center py-6 sm:py-8">
+          <ModeSelection
+            selectedMode={state.mode}
+            targetScore={state.targetScore}
+            onSelectMode={setMode}
+            onSelectTargetScore={setTargetScore}
+            onStart={startGame}
+          />
+        </div>
+      </GameViewport>
     );
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col items-center pt-4 pb-8 px-4">
-      {/* Top bar */}
-      <div className="w-full flex items-center justify-between mb-4 flex-shrink-0">
-        <button
-          onClick={reset}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border
-            ${
-              isDark
-                ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
-                : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
-            }`}
+    <GameViewport title="4구 당구" maxWidth={1560}>
+      <div className="flex flex-1 flex-col gap-6 pt-12 sm:pt-14">
+        <div
+          className={`rounded-[28px] border px-4 py-4 backdrop-blur-md sm:px-6 ${
+            isDark
+              ? "border-white/10 bg-white/5"
+              : "border-gray-200 bg-white/92"
+          }`}
         >
-          나가기
-        </button>
-
-        <ScoreBoard
-          scores={state.scores}
-          targetScore={state.targetScore}
-          currentPlayer={state.currentPlayer}
-        />
-
-        <div className="text-xs text-[#8892a4] font-display">
-          {state.phase === "aiming"
-            ? isMyTurn
-              ? "조준 중"
-              : "상대방 차례..."
-            : state.phase === "rolling"
-              ? "진행 중..."
-              : ""}
-        </div>
-      </div>
-
-      {/* Turn indicator */}
-      <div className="mb-3 text-sm font-medium">
-        <span className="text-[#8892a4]">차례: </span>
-        <span
-          className="font-display font-semibold"
-          style={{
-            color:
-              state.currentPlayer === 0
-                ? BALL_COLORS.white
-                : BALL_COLORS.yellow,
-            textShadow: "0 0 8px rgba(0,0,0,0.5)",
-          }}
-        >
-          {state.currentPlayer === 0 ? "Player 1 (흰공)" : "Player 2 (노란공)"}
-          {isOnlineMode && isMyTurn && " (나)"}
-        </span>
-      </div>
-
-      {/* Canvas + Spin Selector + Power Slider + Shoot Button */}
-      <div className="flex items-start gap-4 w-full max-w-5xl mx-auto justify-center">
-        <BilliardsCanvas
-          balls={state.balls}
-          cueBallId={cueBallId}
-          phase={state.phase}
-          aimPower={state.aimPower}
-          aimDirection={state.aimDirection}
-          onAimChange={setAimDirection}
-          onPhysicsFrame={onPhysicsFrame}
-          disabled={!isMyTurn}
-        />
-        {canAim && (
-          <div className="flex-shrink-0 mt-4 flex flex-col items-center gap-4">
-            <SpinSelector spin={state.aimSpin} onSpinChange={setAimSpin} />
-            <PowerSlider value={state.aimPower} onChange={setAimPower} />
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <button
-              onClick={handleShoot}
-              disabled={!state.aimDirection}
-              className={`px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider text-sm
-                transition-all duration-200 active:scale-95
+              onClick={handleReset}
+              className={`touch-manipulation rounded-lg border px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                isDark
+                  ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
+                  : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
+              }`}
+            >
+              나가기
+            </button>
+
+            <ScoreBoard
+              scores={state.scores}
+              targetScore={state.targetScore}
+              currentPlayer={state.currentPlayer}
+            />
+
+            <div className="text-sm text-[#8892a4] font-display">
+              {state.phase === "aiming"
+                ? isMyTurn
+                  ? "조준 중"
+                  : "상대 차례"
+                : state.phase === "rolling"
+                  ? "샷 진행 중"
+                  : ""}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid flex-1 min-h-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
+          <div
+            className={`flex min-h-[360px] items-center justify-center rounded-[32px] border p-3 backdrop-blur-md sm:p-4 ${
+              isDark
+                ? "border-white/10 bg-white/5"
+                : "border-gray-200 bg-white/92"
+            }`}
+          >
+            <BilliardsCanvas
+              balls={state.balls}
+              cueBallId={cueBallId}
+              phase={state.phase}
+              aimPower={state.aimPower}
+              aimDirection={state.aimDirection}
+              onAimChange={setAimDirection}
+              onPhysicsFrame={onPhysicsFrame}
+              disabled={!isMyTurn}
+            />
+          </div>
+
+          <aside className="flex flex-col gap-4">
+            <div
+              className={`rounded-[32px] border p-6 backdrop-blur-md ${
+                isDark
+                  ? "border-white/10 bg-white/5"
+                  : "border-gray-200 bg-white/92"
+              }`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8892a4]">
+                Turn
+              </p>
+              <h3
+                className="mt-3 font-display text-2xl tracking-[0.12em]"
+                style={{
+                  color:
+                    state.currentPlayer === 0
+                      ? BALL_COLORS.white
+                      : BALL_COLORS.yellow,
+                  textShadow: "0 0 8px rgba(0,0,0,0.35)",
+                }}
+              >
+                {state.currentPlayer === 0 ? "Player 1 (흰공)" : "Player 2 (노란공)"}
+                {isOnlineMode && isMyTurn && " (나)"}
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-[#8892a4]">
+                {canAim
+                  ? "수구를 드래그해 방향을 잡고 당점과 파워를 조절한 뒤 샷을 실행하세요."
+                  : state.phase === "rolling"
+                    ? "현재 샷 물리를 계산 중입니다."
+                    : isOnlineMode && !isMyTurn
+                      ? "상대방이 조준 중입니다."
+                      : "결과를 정리하고 다음 턴을 준비 중입니다."}
+              </p>
+            </div>
+
+            <div
+              className={`rounded-[32px] border p-6 backdrop-blur-md ${
+                isDark
+                  ? "border-white/10 bg-white/5"
+                  : "border-gray-200 bg-white/92"
+              }`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8892a4]">
+                Shot Controls
+              </p>
+
+              {canAim ? (
+                <>
+                  <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 sm:grid-cols-2">
+                    <div className="flex flex-col items-center justify-center rounded-[28px] border border-white/10 bg-black/10 px-4 py-4 [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-gray-50">
+                      <SpinSelector spin={state.aimSpin} onSpinChange={setAimSpin} />
+                    </div>
+                    <div className="flex flex-col items-center justify-center rounded-[28px] border border-white/10 bg-black/10 px-4 py-4 [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-gray-50">
+                      <PowerSlider value={state.aimPower} onChange={setAimPower} />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleShoot}
+                    disabled={!state.aimDirection}
+                    className={`touch-manipulation mt-5 w-full rounded-2xl px-6 py-4 font-display text-base font-semibold tracking-wider transition-all duration-200 active:scale-95 ${
+                      state.aimDirection
+                        ? "bg-gradient-to-r from-[#00f0ff] to-[#0080ff] text-[#0a0e1a] shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/50 hover:scale-[1.02]"
+                        : isDark
+                          ? "bg-white/5 text-white/30 border border-white/10 cursor-not-allowed"
+                          : "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                    }`}
+                  >
+                    발사
+                  </button>
+                </>
+              ) : (
+                <div className="mt-4 rounded-2xl border border-white/10 bg-black/10 px-4 py-4 text-sm leading-6 text-[#8892a4] [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-gray-50">
+                  {state.phase === "rolling"
+                    ? "공이 모두 멈추면 자동으로 점수 판정이 진행됩니다."
+                    : isOnlineMode && !isMyTurn
+                      ? "당구대 물리 상태는 양쪽 클라이언트에서 동일하게 재생됩니다. 상대 턴이 끝날 때까지 기다려주세요."
+                      : "득점 결과를 확인한 뒤 다음 턴으로 넘어갑니다."}
+                </div>
+              )}
+            </div>
+
+            <div
+              className={`rounded-[32px] border p-6 backdrop-blur-md ${
+                isDark
+                  ? "border-white/10 bg-white/5"
+                  : "border-gray-200 bg-white/92"
+              }`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8892a4]">
+                Mobile Tips
+              </p>
+              <p className="mt-3 text-sm leading-6 text-[#8892a4]">
+                {isCoarsePointer
+                  ? "모바일에서는 수구 근처를 넓게 잡아 드래그할 수 있고, 당점/파워 컨트롤도 확대된 터치 영역으로 동작합니다."
+                  : "직선 샷과 뱅크 샷 모두 프레임레이트와 무관한 fixed timestep으로 재생됩니다."}
+              </p>
+            </div>
+          </aside>
+        </div>
+
+        {/* Shot result overlay */}
+        {state.phase === "scoring" && state.shotResult && (
+          <ShotResultOverlay
+            scored={state.shotResult.scored}
+            cueBallHits={state.shotResult.cueBallHits}
+            onContinue={continueAfterScore}
+          />
+        )}
+
+        {/* Game over modal */}
+        {state.phase === "gameOver" && state.winner !== null && (
+          <GameOverModal
+            winner={state.winner}
+            scores={state.scores}
+            onReset={handleReset}
+          />
+        )}
+
+        {online.state.opponentLeft === true && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div
+              className={`flex flex-col items-center gap-6 rounded-2xl border p-8 max-w-sm w-full mx-4
                 ${
-                  state.aimDirection
-                    ? "bg-gradient-to-r from-[#00f0ff] to-[#0080ff] text-[#0a0e1a] shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/50 hover:scale-105"
-                    : isDark
-                      ? "bg-white/5 text-white/30 border border-white/10 cursor-not-allowed"
-                      : "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                  isDark
+                    ? "bg-[#111827] border-white/10"
+                    : "bg-white border-gray-200 shadow-xl"
                 }`}
             >
-              발사
-            </button>
+              <div className="text-center">
+                <h2 className="font-display text-2xl font-bold tracking-wider">상대가 나갔습니다</h2>
+                <p className="mt-2 text-sm text-[#8892a4]">상대 플레이어가 게임을 떠났습니다.</p>
+              </div>
+              <button
+                onClick={handleReset}
+                className="touch-manipulation px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider
+                           bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
+                           text-[#0a0e1a] shadow-lg shadow-cyan-500/25
+                           hover:shadow-cyan-500/50 hover:scale-105
+                           transition-all duration-300 active:scale-95"
+              >
+                나가기
+              </button>
+            </div>
           </div>
         )}
       </div>
-
-      {/* Instruction */}
-      {state.phase === "aiming" && isMyTurn && (
-        <p className="mt-3 text-xs text-[#8892a4] text-center">
-          수구 근처를 클릭+드래그하여 방향을 설정하세요. 당점과 파워를 조절한 후
-          &ldquo;발사&rdquo; 버튼을 누르면 샷이 실행됩니다.
-        </p>
-      )}
-
-      {/* Waiting for opponent */}
-      {state.phase === "aiming" && !isMyTurn && isOnlineMode && (
-        <p className="mt-3 text-xs text-[#8892a4] text-center animate-pulse">
-          상대방이 조준 중입니다...
-        </p>
-      )}
-
-      {/* Shot result overlay */}
-      {state.phase === "scoring" && state.shotResult && (
-        <ShotResultOverlay
-          scored={state.shotResult.scored}
-          cueBallHits={state.shotResult.cueBallHits}
-          onContinue={continueAfterScore}
-        />
-      )}
-
-      {/* Game over modal */}
-      {state.phase === "gameOver" && state.winner !== null && (
-        <GameOverModal
-          winner={state.winner}
-          scores={state.scores}
-          onReset={reset}
-        />
-      )}
-    </div>
+    </GameViewport>
   );
 }
 

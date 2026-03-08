@@ -5,6 +5,8 @@ import { BLACK, type Stone, type Difficulty, type GameMode } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
 import { useOnlineGame } from "../../hooks/useOnlineGame";
 import OnlineLobby from "../../components/online/OnlineLobby";
+import GameViewport from "../../components/game/GameViewport";
+import { useCoarsePointer } from "../../hooks/useCoarsePointer";
 
 const MODE_OPTIONS: { mode: GameMode; label: string; desc: string }[] = [
   { mode: "local", label: "로컬 대전", desc: "같은 기기에서 두 명이 번갈아 플레이" },
@@ -247,6 +249,7 @@ export default function GomokuPage() {
   const { state, placeStone, reset, setMode, setDifficulty, startGame } = useGomokuGame();
   const online = useOnlineGame("gomoku");
   const { theme } = useTheme();
+  const isCoarsePointer = useCoarsePointer();
   const isDark = theme === "dark";
 
   // Auto-start game when guest receives GAME_STARTED (online phase becomes 'playing')
@@ -259,57 +262,61 @@ export default function GomokuPage() {
   // Online mode: show lobby before game starts
   if (state.mode === "online" && state.gameStatus === "waiting") {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          {online.state.phase !== "playing" ? (
-            <>
-              <button
-                onClick={() => { setMode("local"); }}
-                className={`self-start px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
-                  isDark
-                    ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
-                    : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
-                }`}
-              >
-                뒤로
-              </button>
-              <OnlineLobby
-                state={online.state}
-                connected={online.connected}
-                gameLabel="오목 - 15x15 보드에서 5개를 연속으로 놓으세요"
-                onSetNickname={online.setNickname}
-                onConfirmNickname={online.confirmNickname}
-                onCreateRoom={online.createRoom}
-                onJoinRoom={online.joinRoom}
-                onStartGame={() => { online.startGame(); startGame(); }}
-                onLeaveRoom={online.leaveRoom}
+      <GameViewport title="오목" maxWidth={1180}>
+        <div className="flex flex-1 items-center justify-center py-6 sm:py-8">
+          <div className="flex flex-col items-center gap-4">
+            {online.state.phase !== "playing" ? (
+              <>
+                <button
+                  onClick={() => { setMode("local"); }}
+                  className={`touch-manipulation self-start rounded-lg border px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
+                    isDark
+                      ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
+                      : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  뒤로
+                </button>
+                <OnlineLobby
+                  state={online.state}
+                  connected={online.connected}
+                  gameLabel="오목 - 15x15 보드에서 5개를 연속으로 놓으세요"
+                  onSetNickname={online.setNickname}
+                  onConfirmNickname={online.confirmNickname}
+                  onCreateRoom={online.createRoom}
+                  onJoinRoom={online.joinRoom}
+                  onStartGame={() => { online.startGame(); startGame(); }}
+                  onLeaveRoom={online.leaveRoom}
+                />
+              </>
+            ) : (
+              <ModeSelection
+                selectedMode={state.mode}
+                onSelectMode={setMode}
+                difficulty={state.difficulty}
+                onSelectDifficulty={setDifficulty}
+                onStart={startGame}
               />
-            </>
-          ) : (
-            <ModeSelection
-              selectedMode={state.mode}
-              onSelectMode={setMode}
-              difficulty={state.difficulty}
-              onSelectDifficulty={setDifficulty}
-              onStart={startGame}
-            />
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      </GameViewport>
     );
   }
 
   if (state.gameStatus === "waiting") {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
-        <ModeSelection
-          selectedMode={state.mode}
-          onSelectMode={setMode}
-          difficulty={state.difficulty}
-          onSelectDifficulty={setDifficulty}
-          onStart={state.mode === "online" ? () => {} : startGame}
-        />
-      </div>
+      <GameViewport title="오목" maxWidth={1180}>
+        <div className="flex flex-1 items-center justify-center py-6 sm:py-8">
+          <ModeSelection
+            selectedMode={state.mode}
+            onSelectMode={setMode}
+            difficulty={state.difficulty}
+            onSelectDifficulty={setDifficulty}
+            onStart={state.mode === "online" ? () => {} : startGame}
+          />
+        </div>
+      </GameViewport>
     );
   }
 
@@ -361,79 +368,133 @@ export default function GomokuPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col items-center pt-4 pb-8 px-4">
-      {/* Top bar */}
-      <div className="w-full max-w-[640px] flex items-center justify-between mb-2 flex-shrink-0">
-        <button
-          onClick={handleReset}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border
-            ${
-              isDark
-                ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
-                : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
-            }`}
+    <GameViewport title="오목" maxWidth={1440}>
+      <div className="flex flex-1 flex-col gap-6 pt-12 sm:pt-14">
+        <div
+          className={`rounded-[28px] border px-4 py-4 backdrop-blur-md sm:px-6 ${
+            isDark
+              ? "border-white/10 bg-white/5"
+              : "border-gray-200 bg-white/92"
+          }`}
         >
-          나가기
-        </button>
-
-        <PlayerInfo
-          currentPlayer={displayCurrentPlayer}
-          mode={state.mode}
-          aiThinking={state.aiThinking}
-          waitingForOpponent={isOnlinePlaying && !isMyTurn}
-        />
-
-        <div className="text-xs text-[#8892a4]">
-          {state.moveHistory.length}수
-        </div>
-      </div>
-
-      {/* Board */}
-      <div className="flex-1 min-h-0 flex items-center justify-center w-full">
-      <GomokuBoard
-        board={displayBoard}
-        currentPlayer={displayCurrentPlayer}
-        lastMove={displayLastMove}
-        winningLine={state.winningLine}
-        gameStatus={displayGameStatus}
-        aiThinking={state.aiThinking || disableBoard}
-        onPlaceStone={handlePlaceStone}
-      />
-      </div>
-
-      {/* Game Over Modal */}
-      {displayGameStatus === "finished" && (
-        <GameOverModal winner={displayWinner} mode={state.mode} onReset={handleReset} />
-      )}
-
-      {/* Opponent left overlay */}
-      {online.state.opponentLeft === true && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div
-            className={`flex flex-col items-center gap-6 rounded-2xl border p-8 max-w-sm w-full mx-4
-              ${
-                isDark
-                  ? "bg-[#111827] border-white/10"
-                  : "bg-white border-gray-200 shadow-xl"
-              }`}
-          >
-            <div className="text-center">
-              <h2 className="font-display text-2xl font-bold tracking-wider">상대가 나갔습니다</h2>
-              <p className="mt-2 text-sm text-[#8892a4]">상대 플레이어가 게임을 떠났습니다.</p>
-            </div>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <button
               onClick={handleReset}
-              className="px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider
-                         bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
-                         text-[#0a0e1a] shadow-lg shadow-cyan-500/25
-                         hover:shadow-cyan-500/50 hover:scale-105
-                         transition-all duration-300 active:scale-95"
+              className={`touch-manipulation rounded-lg border px-4 py-2 text-sm font-medium transition-all duration-200 ${
+                isDark
+                  ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
+                  : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
+              }`}
             >
               나가기
             </button>
+
+            <PlayerInfo
+              currentPlayer={displayCurrentPlayer}
+              mode={state.mode}
+              aiThinking={state.aiThinking}
+              waitingForOpponent={isOnlinePlaying && !isMyTurn}
+            />
+
+            <div className="text-sm text-[#8892a4]">
+              총 {state.moveHistory.length}수
+            </div>
           </div>
         </div>
-      )}
-    </div>
+
+        <div className="grid flex-1 min-h-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
+          <div
+            className={`flex min-h-[360px] items-center justify-center rounded-[32px] border p-2 backdrop-blur-md sm:p-4 ${
+              isDark
+                ? "border-white/10 bg-white/5"
+                : "border-gray-200 bg-white/92"
+            }`}
+          >
+            <GomokuBoard
+              board={displayBoard}
+              currentPlayer={displayCurrentPlayer}
+              lastMove={displayLastMove}
+              winningLine={state.winningLine}
+              gameStatus={displayGameStatus}
+              aiThinking={state.aiThinking || disableBoard}
+              onPlaceStone={handlePlaceStone}
+            />
+          </div>
+
+          <aside
+            className={`flex flex-col gap-4 rounded-[32px] border p-6 backdrop-blur-md ${
+              isDark
+                ? "border-white/10 bg-white/5"
+                : "border-gray-200 bg-white/92"
+            }`}
+          >
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8892a4]">
+                Match
+              </p>
+              <h3 className="mt-3 font-display text-2xl tracking-[0.12em]">
+                {isOnlinePlaying ? "Online Duel" : state.mode === "ai" ? "AI Match" : "Local Match"}
+              </h3>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-4 [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-gray-50">
+              <p className="text-sm font-semibold text-[#e8ecf1] [data-theme=light]_&:text-[#1a1a2e]">
+                현재 차례
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[#8892a4]">
+                {displayCurrentPlayer === BLACK ? "흑" : "백"}이 둘 차례입니다.
+                {isOnlinePlaying && isMyTurn && " 당신이 둘 수 있습니다."}
+                {isOnlinePlaying && !isMyTurn && " 상대가 두는 중입니다."}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-4 [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-gray-50">
+              <p className="text-sm font-semibold text-[#e8ecf1] [data-theme=light]_&:text-[#1a1a2e]">
+                입력 안내
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[#8892a4]">
+                {isCoarsePointer
+                  ? "모바일에서는 원하는 칸을 한 번 터치해 미리보기한 뒤, 같은 칸을 다시 터치하면 돌을 둡니다."
+                  : "마우스 오버로 위치를 확인하고 클릭 한 번으로 즉시 돌을 둘 수 있습니다."}
+              </p>
+            </div>
+          </aside>
+        </div>
+
+        {/* Game Over Modal */}
+        {displayGameStatus === "finished" && (
+          <GameOverModal winner={displayWinner} mode={state.mode} onReset={handleReset} />
+        )}
+
+        {/* Opponent left overlay */}
+        {online.state.opponentLeft === true && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div
+              className={`flex flex-col items-center gap-6 rounded-2xl border p-8 max-w-sm w-full mx-4
+                ${
+                  isDark
+                    ? "bg-[#111827] border-white/10"
+                    : "bg-white border-gray-200 shadow-xl"
+                }`}
+            >
+              <div className="text-center">
+                <h2 className="font-display text-2xl font-bold tracking-wider">상대가 나갔습니다</h2>
+                <p className="mt-2 text-sm text-[#8892a4]">상대 플레이어가 게임을 떠났습니다.</p>
+              </div>
+              <button
+                onClick={handleReset}
+                className="touch-manipulation px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider
+                           bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
+                           text-[#0a0e1a] shadow-lg shadow-cyan-500/25
+                           hover:shadow-cyan-500/50 hover:scale-105
+                           transition-all duration-300 active:scale-95"
+              >
+                나가기
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </GameViewport>
   );
 }

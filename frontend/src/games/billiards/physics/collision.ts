@@ -4,6 +4,7 @@ import {
   E_BB,
   MU_BB,
   E_C,
+  MU_C,
   M,
   R,
   toMeters,
@@ -39,25 +40,12 @@ export function resolveBallBall(a: Ball, b: Ball): boolean {
   // Don't resolve if balls are separating
   if (velAlongNormal > 0) return true;
 
-  // Normal impulse magnitude (equal mass)
-  const Jn = (1 + E_BB) * (M / 2) * Math.abs(velAlongNormal);
-
-  // Relative tangential velocity at contact point (including spin)
-  // Contact point surface velocity includes omega contribution
-  const rA = R; // distance from center to contact point (in meters)
-  const rB = R;
-
-  // Surface velocity at contact for ball A (pointing along tangent)
-  // v_surface = v_center + omega x r (for 2D, omega.z contributes tangential velocity)
-  const vSurfA_t = a.vel.dot(tangent) + a.omega.z * rA;
-  const vSurfB_t = b.vel.dot(tangent) - b.omega.z * rB;
-  const relTangentVel = vSurfA_t - vSurfB_t;
-
-  // Tangential impulse (Coulomb friction: capped by μ·Jn)
+  // Impulse-based response for equal masses
+  const Jn = -(1 + E_BB) * velAlongNormal * (M / 2);
+  const relTangentVel = relVel.dot(tangent) - R * (a.omega.z + b.omega.z);
+  const desiredJt = -(M / 7) * relTangentVel;
   const maxJt = MU_BB * Jn;
-  const desiredJt = (M / 2) * Math.abs(relTangentVel);
-  const Jt = Math.min(maxJt, desiredJt);
-  const tangentSign = relTangentVel > 0 ? -1 : 1;
+  const Jt = Math.max(-maxJt, Math.min(maxJt, desiredJt));
 
   // Apply normal impulse
   const normalImpulse = normal.scale(Jn / M);
@@ -65,12 +53,12 @@ export function resolveBallBall(a: Ball, b: Ball): boolean {
   b.vel = b.vel.sub(normalImpulse);
 
   // Apply tangential impulse
-  const tangentImpulse = tangent.scale((Jt * tangentSign) / M);
+  const tangentImpulse = tangent.scale(Jt / M);
   a.vel = a.vel.add(tangentImpulse);
   b.vel = b.vel.sub(tangentImpulse);
 
-  // Angular velocity transfer from tangential impulse: Δω = -5·Jt/(2·m·R)
-  const deltaOmegaZ = (5 * Jt * tangentSign) / (2 * M * R);
+  // Tangential impulse spins both balls in the same signed direction.
+  const deltaOmegaZ = (-5 * Jt) / (2 * M * R);
   a.omega.z += deltaOmegaZ;
   b.omega.z += deltaOmegaZ;
 
@@ -141,19 +129,17 @@ function applyCushionBounce(ball: Ball, inwardNormal: Vec2, _rMeters: number): v
 
   const tangent = inwardNormal.perp();
   const vt = ball.vel.dot(tangent);
+  const Jn = -(1 + E_C) * vn * M;
+  const surfaceSlip = vt - R * ball.omega.z;
+  const desiredJt = -(2 * M / 7) * surfaceSlip;
+  const maxJt = MU_C * Jn;
+  const Jt = Math.max(-maxJt, Math.min(maxJt, desiredJt));
 
-  // Normal component: reverse with restitution
   const vnNew = -E_C * vn;
-
-  // Tangential component: modified by sidespin (Han 2005)
-  // For horizontal cushion (normal = (1,0)): tangent = (0,-1) or (0,1)
-  // ωz > 0 means counter-clockwise sidespin (top view)
-  const vtNew = (5 / 7) * vt + (2 / 7) * R * ball.omega.z;
+  const vtNew = vt + Jt / M;
 
   ball.vel = inwardNormal.scale(vnNew).add(tangent.scale(vtNew));
-
-  // Update omega.z after cushion contact
-  ball.omega.z = (5 / 7) * ball.omega.z - (2 / 7) * vt / R;
+  ball.omega.z += (-5 * Jt) / (2 * M * R);
 
   // Re-enter sliding phase after cushion hit
   ball.phase = "sliding";

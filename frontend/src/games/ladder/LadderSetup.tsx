@@ -1,5 +1,7 @@
-import { MIN_PLAYERS, MAX_PLAYERS, PLAYER_COLORS } from "./constants";
+import { useEffect, useState } from "react";
+import { MAX_PLAYERS, MIN_PLAYERS, PLAYER_COLORS } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
+import { clampPlayerCount, resizeLadderEntries } from "./playerCount";
 
 interface LadderSetupProps {
   players: string[];
@@ -18,24 +20,18 @@ export default function LadderSetup({
 }: LadderSetupProps) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
+  const [countInput, setCountInput] = useState(String(players.length));
 
   const isValid = players.every((p) => p.trim() !== "") && prizes.every((p) => p.trim() !== "");
 
-  const setPlayerCount = (count: number) => {
-    const clamped = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, count));
-    if (clamped > players.length) {
-      const newPlayers = [...players];
-      const newPrizes = [...prizes];
-      for (let i = players.length; i < clamped; i++) {
-        newPlayers.push(`Player ${i + 1}`);
-        newPrizes.push(`Prize ${i + 1}`);
-      }
-      onPlayersChange(newPlayers);
-      onPrizesChange(newPrizes);
-    } else if (clamped < players.length) {
-      onPlayersChange(players.slice(0, clamped));
-      onPrizesChange(prizes.slice(0, clamped));
-    }
+  useEffect(() => {
+    setCountInput(String(players.length));
+  }, [players.length]);
+
+  const applyPlayerCount = (count: number) => {
+    const next = resizeLadderEntries(players, prizes, count);
+    onPlayersChange(next.players);
+    onPrizesChange(next.prizes);
   };
 
   const updatePlayer = (index: number, value: string) => {
@@ -66,29 +62,69 @@ export default function LadderSetup({
       </p>
 
       {/* Player count controls */}
-      <div className="flex flex-col items-center gap-2">
+      <div className="flex w-full flex-col items-center gap-3">
         <span className="text-sm font-medium text-[#8892a4]">인원수</span>
-        <div className="flex gap-2">
-          {Array.from({ length: MAX_PLAYERS - MIN_PLAYERS + 1 }, (_, i) => i + MIN_PLAYERS).map(
-            (count) => (
-              <button
-                key={count}
-                onClick={() => setPlayerCount(count)}
-                className={`w-10 h-10 rounded-lg text-sm font-bold transition-all duration-200 border
-                  ${
-                    count === players.length
-                      ? isDark
-                        ? "border-[#00f0ff]/50 bg-[#00f0ff]/20 text-[#00f0ff]"
-                        : "border-blue-400 bg-blue-100 text-blue-700"
-                      : isDark
-                        ? "border-white/10 bg-white/5 hover:bg-white/10 text-white"
-                        : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700"
-                  }`}
-              >
-                {count}
-              </button>
-            ),
-          )}
+        <div className="flex w-full max-w-xs items-center gap-3">
+          <button
+            type="button"
+            onClick={() => applyPlayerCount(players.length - 1)}
+            disabled={players.length <= MIN_PLAYERS}
+            className={`touch-manipulation flex h-12 w-12 items-center justify-center rounded-2xl border text-lg font-bold transition-all duration-200 ${
+              isDark
+                ? "border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700"
+            } disabled:cursor-not-allowed disabled:opacity-40`}
+            aria-label="인원수 감소"
+          >
+            -
+          </button>
+
+          <div className="flex-1">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={MIN_PLAYERS}
+              max={MAX_PLAYERS}
+              value={countInput}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setCountInput(nextValue);
+                const parsed = Number.parseInt(nextValue, 10);
+                if (!Number.isNaN(parsed)) {
+                  applyPlayerCount(parsed);
+                }
+              }}
+              onBlur={() => {
+                const parsed = Number.parseInt(countInput, 10);
+                if (Number.isNaN(parsed)) {
+                  setCountInput(String(players.length));
+                  return;
+                }
+                const clamped = clampPlayerCount(parsed);
+                applyPlayerCount(clamped);
+                setCountInput(String(clamped));
+              }}
+              className={`w-full rounded-2xl border px-4 py-3 text-center text-lg font-semibold outline-none transition-all focus:ring-2 ${inputClass}`}
+              aria-label="인원수 입력"
+            />
+            <p className="mt-2 text-center text-xs text-[#8892a4]">
+              {MIN_PLAYERS}명 ~ {MAX_PLAYERS}명
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => applyPlayerCount(players.length + 1)}
+            disabled={players.length >= MAX_PLAYERS}
+            className={`touch-manipulation flex h-12 w-12 items-center justify-center rounded-2xl border text-lg font-bold transition-all duration-200 ${
+              isDark
+                ? "border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700"
+            } disabled:cursor-not-allowed disabled:opacity-40`}
+            aria-label="인원수 증가"
+          >
+            +
+          </button>
         </div>
       </div>
 
@@ -110,7 +146,7 @@ export default function LadderSetup({
                 value={name}
                 onChange={(e) => updatePlayer(i, e.target.value)}
                 placeholder={`Player ${i + 1}`}
-                className={`flex-1 px-3 py-2 rounded-lg border text-sm outline-none transition-all focus:ring-2 ${inputClass}`}
+                className={`flex-1 px-3 py-3 rounded-xl border text-sm outline-none transition-all focus:ring-2 ${inputClass}`}
               />
             </div>
           ))}
@@ -131,7 +167,7 @@ export default function LadderSetup({
                 value={prize}
                 onChange={(e) => updatePrize(i, e.target.value)}
                 placeholder={`Prize ${i + 1}`}
-                className={`flex-1 px-3 py-2 rounded-lg border text-sm outline-none transition-all focus:ring-2 ${inputClass}`}
+                className={`flex-1 px-3 py-3 rounded-xl border text-sm outline-none transition-all focus:ring-2 ${inputClass}`}
               />
             </div>
           ))}

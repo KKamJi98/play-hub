@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import { BOARD_SIZE, EMPTY, BLACK, type Stone, type Player } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
+import { useCoarsePointer } from "../../hooks/useCoarsePointer";
+import { useDisplaySettings } from "../../hooks/useDisplaySettings";
 
 interface GomokuBoardProps {
   board: Stone[][];
@@ -22,6 +24,8 @@ export default function GomokuBoard({
   onPlaceStone,
 }: GomokuBoardProps) {
   const { theme } = useTheme();
+  const { displayScale } = useDisplaySettings();
+  const isCoarsePointer = useCoarsePointer();
   const [hoverPos, setHoverPos] = useState<{ row: number; col: number } | null>(null);
 
   const winningSet = useMemo(() => {
@@ -31,16 +35,34 @@ export default function GomokuBoard({
 
   const isInteractive = gameStatus === "playing" && !aiThinking;
   const isDark = theme === "dark";
+  const boardMaxSize = Math.round(920 * Math.min(displayScale, 1.15));
 
   // Board dimensions: CSS Grid based on intersection count
   const cellCount = BOARD_SIZE - 1;
 
+  const activateCell = (row: number, col: number, cell: Stone) => {
+    if (!isInteractive || cell !== EMPTY) return;
+
+    if (isCoarsePointer) {
+      if (hoverPos?.row === row && hoverPos?.col === col) {
+        onPlaceStone(row, col);
+        setHoverPos(null);
+        return;
+      }
+
+      setHoverPos({ row, col });
+      return;
+    }
+
+    onPlaceStone(row, col);
+  };
+
   return (
     <div className="flex items-center justify-center p-2 sm:p-4">
       <div
-        className="relative select-none"
+        className="touch-manipulation relative select-none"
         style={{
-          width: "min(90vw, 80vh)",
+          width: `min(100%, 92vw, 88dvh, ${boardMaxSize}px)`,
           aspectRatio: "1 / 1",
         }}
       >
@@ -159,17 +181,17 @@ export default function GomokuBoard({
                       cursor: isInteractive && cell === EMPTY ? "pointer" : "default",
                     }}
                     onClick={() => {
-                      if (isInteractive && cell === EMPTY) {
-                        onPlaceStone(r, c);
-                      }
+                      activateCell(r, c, cell);
                     }}
                     onMouseEnter={() => {
-                      if (isInteractive && cell === EMPTY) {
+                      if (!isCoarsePointer && isInteractive && cell === EMPTY) {
                         setHoverPos({ row: r, col: c });
                       }
                     }}
                     onMouseLeave={() => {
-                      setHoverPos(null);
+                      if (!isCoarsePointer) {
+                        setHoverPos(null);
+                      }
                     }}
                   >
                     {/* Placed stone */}

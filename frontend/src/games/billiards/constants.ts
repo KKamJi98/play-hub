@@ -56,11 +56,11 @@ export function toPixels(m: number): number {
 
 // ---- Simulation -----------------------------------------------------------
 
-/** Physics sub-steps per animation frame (120 Hz physics at 60 fps) */
-export const SUB_STEPS = 2;
-
 /** Fixed timestep per physics sub-step (seconds) */
-export const PHYSICS_DT = 1 / 120;
+export const PHYSICS_DT = 1 / 240;
+
+/** Guard rail to avoid spiral-of-death after tab restore / long frames */
+export const MAX_SIMULATION_STEPS_PER_TICK = 12;
 
 /** Velocity threshold (m/s) below which a ball is considered stopped */
 export const STOP_THRESHOLD = 0.02;

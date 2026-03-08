@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import ThemeToggle from "./ThemeToggle";
+import DisplayScaleControl from "../ui/DisplayScaleControl";
 
 export default function Header() {
   return (
@@ -36,6 +37,7 @@ export default function Header() {
             >
               Games
             </Link>
+            <DisplayScaleControl />
             <ThemeToggle />
           </nav>
         </div>

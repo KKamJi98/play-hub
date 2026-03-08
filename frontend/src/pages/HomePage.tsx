@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { getAll } from "../games/registry";
 import type { GameDefinition } from "../games/types";
+import { useDisplaySettings } from "../hooks/useDisplaySettings";
 
 const CATEGORY_LABELS: Record<GameDefinition["category"], string> = {
   board: "Board",
@@ -248,7 +249,7 @@ function GameCard({ game }: { game: GameDefinition }) {
   return (
     <Link
       to={`/games/${game.id}`}
-      className="card-glow group relative flex flex-col overflow-hidden rounded-2xl
+      className="touch-manipulation card-glow group relative flex h-full min-h-[22rem] flex-col overflow-hidden rounded-[28px]
                  border border-white/10 bg-white/5 backdrop-blur-sm
                  [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-white"
     >
@@ -270,12 +271,12 @@ function GameCard({ game }: { game: GameDefinition }) {
       </div>
 
       {/* Content */}
-      <div className="flex flex-1 flex-col gap-3 p-5">
+      <div className="flex flex-1 flex-col gap-4 p-6">
         <div>
-          <h3 className="font-display text-lg font-semibold tracking-wide group-hover:text-[#00f0ff] transition-colors duration-300">
+          <h3 className="font-display text-xl font-semibold tracking-wide transition-colors duration-300 group-hover:text-[#00f0ff]">
             {game.nameKo}
           </h3>
-          <p className="mt-1 text-sm text-[#8892a4] line-clamp-2">
+          <p className="mt-2 text-sm leading-6 text-[#8892a4] line-clamp-3">
             {game.description}
           </p>
         </div>
@@ -344,12 +345,34 @@ const PLACEHOLDER_GAMES: GameDefinition[] = [
 ];
 
 export default function HomePage() {
+  const { displayScale } = useDisplaySettings();
   const registeredGames = getAll();
   const displayGames =
     registeredGames.length > 0 ? registeredGames : PLACEHOLDER_GAMES;
+  const homeMaxWidth = Math.round(1680 * Math.min(displayScale, 1.15));
+  const cardMinWidth = Math.round(300 * Math.min(displayScale, 1.1));
+  const titleSize = `clamp(3.5rem, ${6.2 * displayScale}vw, ${8.25 * displayScale}rem)`;
+  const descriptionSize = `clamp(1rem, ${1.4 * displayScale}vw, ${1.35 * displayScale}rem)`;
+  const stats = [
+    {
+      value: String(registeredGames.length),
+      label: "Games Ready",
+      tone: "text-[#00f0ff]",
+    },
+    {
+      value: "4",
+      label: "Categories",
+      tone: "text-[#ffb800]",
+    },
+    {
+      value: "Any Screen",
+      label: "Responsive Play",
+      tone: "text-emerald-400",
+    },
+  ];
 
   return (
-    <div className="gradient-mesh relative min-h-screen overflow-hidden">
+    <div className="gradient-mesh relative min-h-[calc(100dvh-4rem)] overflow-hidden">
       {/* Floating particles */}
       <div className="pointer-events-none absolute inset-0" aria-hidden="true">
         <div
@@ -393,68 +416,82 @@ export default function HomePage() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative px-4 pt-12 pb-10 sm:pt-20 sm:pb-16 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl text-center">
-          {/* Glowing accent line */}
-          <div className="mx-auto mb-8 h-1 w-24 rounded-full bg-gradient-to-r from-[#00f0ff] to-[#0080ff] shadow-lg shadow-cyan-500/50" />
-
-          <h1 className="font-display text-3xl font-black tracking-wider sm:text-5xl lg:text-6xl xl:text-7xl">
-            <span className="bg-gradient-to-r from-[#00f0ff] via-white to-[#ffb800] bg-clip-text text-transparent">
-              PLAY HUB
-            </span>
-          </h1>
-
-          <p className="mx-auto mt-6 max-w-2xl text-sm text-[#8892a4] sm:text-lg">
-            친구들과 함께 즐기는 게임 아케이드.
-            <br />
-            보드 게임부터 물리 퍼즐까지, 다양한 게임을 한 곳에서.
-          </p>
-
-          {/* Stats row */}
-          <div className="mx-auto mt-10 flex max-w-md items-center justify-center gap-8 sm:gap-12">
-            <div className="text-center">
-              <div className="font-display text-2xl font-bold text-[#00f0ff]">
-                {registeredGames.length}
+      <section className="relative px-4 pb-12 pt-10 sm:px-6 sm:pt-16 lg:px-10 lg:pt-20">
+        <div
+          className="mx-auto grid gap-10"
+          style={{ maxWidth: homeMaxWidth }}
+        >
+          <div className="grid gap-8 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)] xl:items-end">
+            <div className="text-center xl:text-left">
+              <div className="mx-auto mb-6 inline-flex rounded-full border border-cyan-400/25 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-cyan-300 xl:mx-0">
+                Multi Game Arcade
               </div>
-              <div className="mt-1 text-xs uppercase tracking-widest text-[#8892a4]">
-                Games
-              </div>
+              <div className="mb-8 h-1 w-24 rounded-full bg-gradient-to-r from-[#00f0ff] via-white/80 to-[#ffb800] shadow-lg shadow-cyan-500/40 xl:mx-0" />
+
+              <h1
+                className="font-display font-black leading-none tracking-[0.14em]"
+                style={{ fontSize: titleSize }}
+              >
+                <span className="bg-gradient-to-r from-[#00f0ff] via-white to-[#ffb800] bg-clip-text text-transparent">
+                  PLAY HUB
+                </span>
+              </h1>
+
+              <p
+                className="mx-auto mt-6 max-w-3xl leading-7 text-[#aab7cf] xl:mx-0"
+                style={{ fontSize: descriptionSize }}
+              >
+                친구들과 함께 즐기는 게임 아케이드.
+                <br className="hidden sm:block" />
+                보드 게임부터 물리 퍼즐까지, 다양한 게임을 FHD, QHD, 창모드,
+                모바일까지 자연스럽게 이어서 플레이하세요.
+              </p>
             </div>
-            <div className="h-8 w-px bg-white/10" />
-            <div className="text-center">
-              <div className="font-display text-2xl font-bold text-[#ffb800]">
-                4
-              </div>
-              <div className="mt-1 text-xs uppercase tracking-widest text-[#8892a4]">
-                Categories
-              </div>
-            </div>
-            <div className="h-8 w-px bg-white/10" />
-            <div className="text-center">
-              <div className="font-display text-2xl font-bold text-emerald-400">
-                Free
-              </div>
-              <div className="mt-1 text-xs uppercase tracking-widest text-[#8892a4]">
-                Forever
-              </div>
+
+            <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+              {stats.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-[28px] border border-white/10 bg-white/8 px-5 py-5 text-left backdrop-blur-md [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-white/95"
+                >
+                  <div className={`font-display text-3xl font-bold tracking-wide ${stat.tone}`}>
+                    {stat.value}
+                  </div>
+                  <div className="mt-2 text-xs uppercase tracking-[0.28em] text-[#8892a4]">
+                    {stat.label}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
       {/* Game Grid */}
-      <section className="relative px-4 pb-24 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl">
+      <section className="relative px-4 pb-24 sm:px-6 lg:px-10">
+        <div className="mx-auto" style={{ maxWidth: homeMaxWidth }}>
           {/* Section header */}
-          <div className="mb-8 flex items-center gap-4">
-            <h2 className="font-display text-xl font-semibold tracking-wider">
-              ALL GAMES
-            </h2>
-            <div className="h-px flex-1 bg-gradient-to-r from-white/20 to-transparent" />
+          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8892a4]">
+                Library
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-semibold tracking-[0.16em] sm:text-3xl">
+                ALL GAMES
+              </h2>
+            </div>
+            <div className="text-sm text-[#8892a4]">
+              화면 크기에 맞춰 카드 크기와 배치가 자동으로 조정됩니다.
+            </div>
           </div>
 
           {/* Grid */}
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div
+            className="grid gap-6"
+            style={{
+              gridTemplateColumns: `repeat(auto-fit, minmax(${cardMinWidth}px, 1fr))`,
+            }}
+          >
             {displayGames.map((game) => (
               <GameCard key={game.id} game={game} />
             ))}

@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from "react";
 import { ROULETTE_COLORS } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
+import { useDisplaySettings } from "../../hooks/useDisplaySettings";
 
 interface RouletteProps {
   items: string[];
@@ -24,15 +25,17 @@ export default function Roulette({
   result,
 }: RouletteProps) {
   const { theme } = useTheme();
+  const { displayScale } = useDisplaySettings();
   const isDark = theme === "dark";
   const wheelRef = useRef<SVGGElement>(null);
   const [currentRotation, setCurrentRotation] = useState(0);
 
-  const size = 320;
+  const size = 360;
   const cx = size / 2;
   const cy = size / 2;
   const radius = size / 2 - 10;
   const sliceAngle = 360 / items.length;
+  const maxWidth = Math.round(420 * Math.min(displayScale, 1.15));
 
   // Handle spin animation via CSS transition
   useEffect(() => {
@@ -109,7 +112,10 @@ export default function Roulette({
     : "none";
 
   return (
-    <div className="relative flex flex-col items-center">
+    <div
+      className="relative flex w-full flex-col items-center"
+      style={{ maxWidth }}
+    >
       {/* Pointer arrow at top */}
       <div className="relative z-10 -mb-2">
         <svg width="30" height="24" viewBox="0 0 30 24">
@@ -125,7 +131,7 @@ export default function Roulette({
         width={size}
         height={size}
         viewBox={`0 0 ${size} ${size}`}
-        className="drop-shadow-lg"
+        className="h-auto w-full drop-shadow-lg"
       >
         <g
           ref={wheelRef}
