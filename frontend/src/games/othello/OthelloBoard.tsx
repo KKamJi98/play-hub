@@ -58,7 +58,7 @@ export default function OthelloBoard({
       <div
         className="relative select-none"
         style={{
-          width: "min(90vw, min(80vh, 560px))",
+          width: "min(90vw, 80vh)",
           aspectRatio: "1 / 1",
         }}
       >

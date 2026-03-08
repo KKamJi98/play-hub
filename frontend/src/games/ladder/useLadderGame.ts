@@ -12,6 +12,7 @@ interface LadderGameState {
   animatingPath: number | null;
   animationProgress: number;
   revealQueue: number[];
+  autoRevealing: boolean;
 }
 
 export function useLadderGame() {
@@ -24,10 +25,12 @@ export function useLadderGame() {
     animatingPath: null,
     animationProgress: 0,
     revealQueue: [],
+    autoRevealing: false,
   });
 
   const animFrameRef = useRef<number>(0);
   const animStartRef = useRef<number>(0);
+  const autoRevealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const ANIM_DURATION = 1500; // ms
 
@@ -36,6 +39,9 @@ export function useLadderGame() {
     return () => {
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
+      }
+      if (autoRevealTimeoutRef.current) {
+        clearTimeout(autoRevealTimeoutRef.current);
       }
     };
   }, []);
@@ -123,7 +129,57 @@ export function useLadderGame() {
     });
   }, [animatePath]);
 
+  const autoReveal = useCallback(() => {
+    setState((s) => {
+      if (!s.ladderData || s.animatingPath !== null || s.autoRevealing) return s;
+      return { ...s, autoRevealing: true };
+    });
+
+    const doNext = () => {
+      setState((s) => {
+        if (!s.ladderData) return s;
+
+        // Find next unrevealed
+        let nextCol = -1;
+        for (let i = 0; i < s.ladderData.columns; i++) {
+          if (!s.revealedPaths.has(i)) {
+            nextCol = i;
+            break;
+          }
+        }
+
+        if (nextCol === -1) {
+          // All revealed
+          return { ...s, phase: "results", autoRevealing: false };
+        }
+
+        // Animate this one, then schedule next after delay
+        setTimeout(() => animatePath(nextCol, () => {
+          autoRevealTimeoutRef.current = setTimeout(doNext, 800);
+        }), 0);
+
+        return s;
+      });
+    };
+
+    doNext();
+  }, [animatePath]);
+
+  const stopAutoReveal = useCallback(() => {
+    if (autoRevealTimeoutRef.current) {
+      clearTimeout(autoRevealTimeoutRef.current);
+      autoRevealTimeoutRef.current = null;
+    }
+    setState((s) => ({ ...s, autoRevealing: false }));
+  }, []);
+
   const revealAll = useCallback(() => {
+    // Stop auto-reveal if running
+    if (autoRevealTimeoutRef.current) {
+      clearTimeout(autoRevealTimeoutRef.current);
+      autoRevealTimeoutRef.current = null;
+    }
+
     setState((s) => {
       if (!s.ladderData || s.animatingPath !== null) return s;
 
@@ -135,7 +191,7 @@ export function useLadderGame() {
       }
 
       if (unrevealed.length === 0) {
-        return { ...s, phase: "results" };
+        return { ...s, phase: "results", autoRevealing: false };
       }
 
       // Reveal all at once, no animation
@@ -148,6 +204,7 @@ export function useLadderGame() {
         ...s,
         revealedPaths: newRevealed,
         phase: "results",
+        autoRevealing: false,
       };
     });
   }, []);
@@ -155,6 +212,10 @@ export function useLadderGame() {
   const reset = useCallback(() => {
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
+    }
+    if (autoRevealTimeoutRef.current) {
+      clearTimeout(autoRevealTimeoutRef.current);
+      autoRevealTimeoutRef.current = null;
     }
     setState((s) => ({
       ...s,
@@ -164,6 +225,7 @@ export function useLadderGame() {
       animatingPath: null,
       animationProgress: 0,
       revealQueue: [],
+      autoRevealing: false,
     }));
   }, []);
 
@@ -177,6 +239,8 @@ export function useLadderGame() {
     setPrizes,
     generate,
     revealOne,
+    autoReveal,
+    stopAutoReveal,
     revealAll,
     reset,
     allRevealed,

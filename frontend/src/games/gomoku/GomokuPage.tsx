@@ -1,7 +1,9 @@
 import { useGomokuGame } from "./useGomokuGame";
 import GomokuBoard from "./GomokuBoard";
-import { BLACK, type Difficulty, type GameMode } from "./constants";
+import { BLACK, type Stone, type Difficulty, type GameMode } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
+import { useOnlineGame } from "../../hooks/useOnlineGame";
+import OnlineLobby from "../../components/online/OnlineLobby";
 
 const MODE_OPTIONS: { mode: GameMode; label: string; desc: string }[] = [
   { mode: "local", label: "로컬 대전", desc: "같은 기기에서 두 명이 번갈아 플레이" },
@@ -46,23 +48,19 @@ function ModeSelection({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-2xl">
         {MODE_OPTIONS.map(({ mode, label, desc }) => {
           const isSelected = selectedMode === mode;
-          const isDisabled = mode === "online";
           return (
             <button
               key={mode}
-              onClick={() => !isDisabled && onSelectMode(mode)}
-              disabled={isDisabled}
+              onClick={() => onSelectMode(mode)}
               className={`relative flex flex-col items-center gap-2 rounded-xl border p-6 transition-all duration-200
                 ${
-                  isDisabled
-                    ? "opacity-40 cursor-not-allowed border-white/5"
-                    : isSelected
-                      ? isDark
-                        ? "border-[#00f0ff]/50 bg-[#00f0ff]/10 shadow-lg shadow-cyan-500/10"
-                        : "border-blue-400/50 bg-blue-50 shadow-lg shadow-blue-500/10"
-                      : isDark
-                        ? "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10"
-                        : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                  isSelected
+                    ? isDark
+                      ? "border-[#00f0ff]/50 bg-[#00f0ff]/10 shadow-lg shadow-cyan-500/10"
+                      : "border-blue-400/50 bg-blue-50 shadow-lg shadow-blue-500/10"
+                    : isDark
+                      ? "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10"
+                      : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
                 }`}
             >
               <span
@@ -73,11 +71,6 @@ function ModeSelection({
                 {label}
               </span>
               <span className="text-xs text-[#8892a4] text-center">{desc}</span>
-              {isDisabled && (
-                <span className="absolute top-2 right-2 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  준비중
-                </span>
-              )}
             </button>
           );
         })}
@@ -246,8 +239,52 @@ function GameOverModal({
 
 export default function GomokuPage() {
   const { state, placeStone, reset, setMode, setDifficulty, startGame } = useGomokuGame();
+  const online = useOnlineGame("gomoku");
   const { theme } = useTheme();
   const isDark = theme === "dark";
+
+  // Online mode: show lobby before game starts
+  if (state.mode === "online" && state.gameStatus === "waiting") {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          {online.state.phase !== "playing" ? (
+            <>
+              <button
+                onClick={() => { setMode("local"); }}
+                className={`self-start px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
+                  isDark
+                    ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
+                    : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
+                }`}
+              >
+                뒤로
+              </button>
+              <OnlineLobby
+                state={online.state}
+                connected={online.connected}
+                gameLabel="오목 - 15x15 보드에서 5개를 연속으로 놓으세요"
+                onSetNickname={online.setNickname}
+                onConfirmNickname={online.confirmNickname}
+                onCreateRoom={online.createRoom}
+                onJoinRoom={online.joinRoom}
+                onStartGame={online.startGame}
+                onLeaveRoom={online.leaveRoom}
+              />
+            </>
+          ) : (
+            <ModeSelection
+              selectedMode={state.mode}
+              onSelectMode={setMode}
+              difficulty={state.difficulty}
+              onSelectDifficulty={setDifficulty}
+              onStart={startGame}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (state.gameStatus === "waiting") {
     return (
@@ -257,18 +294,65 @@ export default function GomokuPage() {
           onSelectMode={setMode}
           difficulty={state.difficulty}
           onSelectDifficulty={setDifficulty}
-          onStart={startGame}
+          onStart={state.mode === "online" ? () => {} : startGame}
         />
       </div>
     );
   }
 
+  // Online playing mode: use server state if available
+  const isOnlinePlaying = state.mode === "online" && online.state.phase === "playing";
+  const serverState = online.state.gameState as {
+    board?: number[][];
+    currentPlayer?: number;
+    lastMove?: { row: number; col: number } | null;
+    gameStatus?: string;
+    winner?: number;
+  } | null;
+
+  const displayBoard: Stone[][] = isOnlinePlaying && serverState?.board
+    ? serverState.board.map((row) => row.map((c) => c as Stone))
+    : state.board;
+  const displayCurrentPlayer = isOnlinePlaying && serverState?.currentPlayer
+    ? (serverState.currentPlayer as 1 | 2)
+    : state.currentPlayer;
+  const displayLastMove = isOnlinePlaying && serverState
+    ? serverState.lastMove ?? null
+    : state.lastMove;
+  const displayGameStatus = isOnlinePlaying && serverState?.gameStatus
+    ? (serverState.gameStatus === "FINISHED" ? "finished" : "playing") as "playing" | "finished"
+    : state.gameStatus as "playing" | "finished";
+  const displayWinner = isOnlinePlaying && serverState?.winner !== undefined
+    ? (serverState.winner as 0 | 1 | 2)
+    : state.winner;
+
+  // In online mode, only allow placing stones on your turn
+  const myPlayerStone = online.state.playerIndex !== null ? online.state.playerIndex + 1 : 0;
+  const isMyTurn = !isOnlinePlaying || displayCurrentPlayer === myPlayerStone;
+  const disableBoard = isOnlinePlaying && !isMyTurn;
+
+  const handlePlaceStone = (row: number, col: number) => {
+    if (isOnlinePlaying) {
+      if (!isMyTurn) return;
+      online.sendAction({ type: "PLACE_STONE", row, col });
+    } else {
+      placeStone(row, col);
+    }
+  };
+
+  const handleReset = () => {
+    if (isOnlinePlaying) {
+      online.leaveRoom();
+    }
+    reset();
+  };
+
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center pt-4 pb-8 px-4">
+    <div className="h-[calc(100vh-4rem)] flex flex-col items-center pt-4 pb-8 px-4">
       {/* Top bar */}
-      <div className="w-full max-w-[640px] flex items-center justify-between mb-2">
+      <div className="w-full max-w-[640px] flex items-center justify-between mb-2 flex-shrink-0">
         <button
-          onClick={reset}
+          onClick={handleReset}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border
             ${
               isDark
@@ -280,9 +364,9 @@ export default function GomokuPage() {
         </button>
 
         <PlayerInfo
-          currentPlayer={state.currentPlayer}
+          currentPlayer={displayCurrentPlayer}
           mode={state.mode}
-          aiThinking={state.aiThinking}
+          aiThinking={state.aiThinking || (isOnlinePlaying && !isMyTurn)}
         />
 
         <div className="text-xs text-[#8892a4]">
@@ -291,19 +375,21 @@ export default function GomokuPage() {
       </div>
 
       {/* Board */}
+      <div className="flex-1 min-h-0 flex items-center justify-center w-full">
       <GomokuBoard
-        board={state.board}
-        currentPlayer={state.currentPlayer}
-        lastMove={state.lastMove}
+        board={displayBoard}
+        currentPlayer={displayCurrentPlayer}
+        lastMove={displayLastMove}
         winningLine={state.winningLine}
-        gameStatus={state.gameStatus}
-        aiThinking={state.aiThinking}
-        onPlaceStone={placeStone}
+        gameStatus={displayGameStatus}
+        aiThinking={state.aiThinking || disableBoard}
+        onPlaceStone={handlePlaceStone}
       />
+      </div>
 
       {/* Game Over Modal */}
-      {state.gameStatus === "finished" && (
-        <GameOverModal winner={state.winner} mode={state.mode} onReset={reset} />
+      {displayGameStatus === "finished" && (
+        <GameOverModal winner={displayWinner} mode={state.mode} onReset={handleReset} />
       )}
     </div>
   );

@@ -32,4 +32,35 @@ class RoomController(private val roomService: RoomService) {
             ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(RoomResponse.from(room))
     }
+
+    @PostMapping("/{id}/join")
+    fun joinRoom(
+        @PathVariable id: String,
+        @RequestBody request: Map<String, String>
+    ): ResponseEntity<Any> {
+        val nickname = request["nickname"]
+            ?: return ResponseEntity.badRequest().body(mapOf("error" to "nickname is required"))
+        val room = roomService.getRoom(id)
+            ?: return ResponseEntity.notFound().build()
+
+        if (room.state != RoomState.WAITING) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(mapOf("error" to "Room is not accepting players"))
+        }
+
+        val playerIndex = room.players.size
+        val player = Player(
+            sessionId = java.util.UUID.randomUUID().toString().substring(0, 8),
+            nickname = nickname,
+            index = playerIndex
+        )
+        roomService.joinRoom(id, player)
+
+        return ResponseEntity.ok(mapOf(
+            "playerIndex" to playerIndex,
+            "players" to room.players.map {
+                mapOf("sessionId" to it.sessionId, "nickname" to it.nickname, "index" to it.index)
+            }
+        ))
+    }
 }

@@ -49,32 +49,33 @@ export function separateBalls(
   b.pos = b.pos.sub(correction);
 }
 
-/** Resolve ball-cushion (wall) bounce. Mutates ball. */
+/** Resolve ball-cushion (wall) bounce. Mutates ball. Spin.x (english) affects the perpendicular velocity component on bounce. */
 export function resolveBallCushion(
   ball: Ball,
   tableWidth: number,
   tableHeight: number,
 ): void {
   const r = ball.radius;
+  const englishFactor = 0.3; // how strongly english affects perpendicular velocity
 
   // Left wall
   if (ball.pos.x - r < 0) {
     ball.pos = new Vec2(r, ball.pos.y);
-    ball.vel = new Vec2(-ball.vel.x * CUSHION_RESTITUTION, ball.vel.y);
+    ball.vel = new Vec2(-ball.vel.x * CUSHION_RESTITUTION, ball.vel.y + ball.spin.x * englishFactor);
   }
   // Right wall
   if (ball.pos.x + r > tableWidth) {
     ball.pos = new Vec2(tableWidth - r, ball.pos.y);
-    ball.vel = new Vec2(-ball.vel.x * CUSHION_RESTITUTION, ball.vel.y);
+    ball.vel = new Vec2(-ball.vel.x * CUSHION_RESTITUTION, ball.vel.y - ball.spin.x * englishFactor);
   }
   // Top wall
   if (ball.pos.y - r < 0) {
     ball.pos = new Vec2(ball.pos.x, r);
-    ball.vel = new Vec2(ball.vel.x, -ball.vel.y * CUSHION_RESTITUTION);
+    ball.vel = new Vec2(ball.vel.x + ball.spin.x * englishFactor, -ball.vel.y * CUSHION_RESTITUTION);
   }
   // Bottom wall
   if (ball.pos.y + r > tableHeight) {
     ball.pos = new Vec2(ball.pos.x, tableHeight - r);
-    ball.vel = new Vec2(ball.vel.x, -ball.vel.y * CUSHION_RESTITUTION);
+    ball.vel = new Vec2(ball.vel.x - ball.spin.x * englishFactor, -ball.vel.y * CUSHION_RESTITUTION);
   }
 }

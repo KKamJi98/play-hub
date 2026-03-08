@@ -69,7 +69,7 @@ export default function BilliardsCanvas({
       const rect = container.getBoundingClientRect();
       const maxW = rect.width;
       const aspectRatio = TOTAL_W / TOTAL_H;
-      const w = Math.min(maxW, 1200);
+      const w = maxW;
       const h = w / aspectRatio;
       setCanvasSize({ w, h });
       scaleRef.current = w / TOTAL_W;
@@ -105,6 +105,7 @@ export default function BilliardsCanvas({
         ...b,
         pos: new Vec2(b.pos.x, b.pos.y),
         vel: new Vec2(b.vel.x, b.vel.y),
+        spin: new Vec2(b.spin.x, b.spin.y),
       }));
     }
   }, [phase, balls]);
@@ -257,7 +258,7 @@ export default function BilliardsCanvas({
   }, [canvasSize, balls, phase, cueBallId, onPhysicsFrame]);
 
   return (
-    <div ref={containerRef} className="w-full max-w-[1200px]">
+    <div ref={containerRef} className="w-full">
       <canvas
         ref={canvasRef}
         style={{ width: canvasSize.w, height: canvasSize.h, cursor: phase === "aiming" ? "crosshair" : "default" }}

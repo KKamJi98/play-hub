@@ -1,9 +1,12 @@
 import { useBilliardsGame } from "./useBilliardsGame";
 import type { GameMode } from "./useBilliardsGame";
 import BilliardsCanvas from "./BilliardsCanvas";
+import SpinSelector from "./SpinSelector";
 import { TARGET_SCORE_OPTIONS, BALL_COLORS } from "./constants";
 import type { BallId } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
+import { useOnlineGame } from "../../hooks/useOnlineGame";
+import OnlineLobby from "../../components/online/OnlineLobby";
 
 // ---- Mode options ----------------------------------------------------------
 
@@ -54,23 +57,19 @@ function ModeSelection({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
         {MODE_OPTIONS.map(({ mode, label, desc }) => {
           const isSelected = selectedMode === mode;
-          const isDisabled = mode === "online";
           return (
             <button
               key={mode}
-              onClick={() => !isDisabled && onSelectMode(mode)}
-              disabled={isDisabled}
+              onClick={() => onSelectMode(mode)}
               className={`relative flex flex-col items-center gap-2 rounded-xl border p-6 transition-all duration-200
                 ${
-                  isDisabled
-                    ? "opacity-40 cursor-not-allowed border-white/5"
-                    : isSelected
-                      ? isDark
-                        ? "border-[#00f0ff]/50 bg-[#00f0ff]/10 shadow-lg shadow-cyan-500/10"
-                        : "border-blue-400/50 bg-blue-50 shadow-lg shadow-blue-500/10"
-                      : isDark
-                        ? "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10"
-                        : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                  isSelected
+                    ? isDark
+                      ? "border-[#00f0ff]/50 bg-[#00f0ff]/10 shadow-lg shadow-cyan-500/10"
+                      : "border-blue-400/50 bg-blue-50 shadow-lg shadow-blue-500/10"
+                    : isDark
+                      ? "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10"
+                      : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
                 }`}
             >
               <span
@@ -81,11 +80,6 @@ function ModeSelection({
                 {label}
               </span>
               <span className="text-xs text-[#8892a4] text-center">{desc}</span>
-              {isDisabled && (
-                <span className="absolute top-2 right-2 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  준비중
-                </span>
-              )}
             </button>
           );
         })}
@@ -293,17 +287,62 @@ export default function BilliardsPage() {
     setMode,
     setTargetScore,
     startGame,
+    setAimSpin,
     shoot,
     onPhysicsFrame,
     continueAfterScore,
     reset,
   } = useBilliardsGame();
 
+  const online = useOnlineGame("billiards");
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
   const cueBallId: BallId =
     state.currentPlayer === 0 ? "white" : "yellow";
+
+  // Online mode: show lobby in setup
+  if (state.mode === "online" && state.phase === "setup") {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          {online.state.phase !== "playing" ? (
+            <>
+              <button
+                onClick={() => { setMode("local"); }}
+                className={`self-start px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
+                  isDark
+                    ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
+                    : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
+                }`}
+              >
+                뒤로
+              </button>
+              <OnlineLobby
+                state={online.state}
+                connected={online.connected}
+                gameLabel="4구 당구 - 캐롬 당구 온라인 대전"
+                onSetNickname={online.setNickname}
+                onConfirmNickname={online.confirmNickname}
+                onCreateRoom={online.createRoom}
+                onJoinRoom={online.joinRoom}
+                onStartGame={() => { online.startGame(); startGame(); }}
+                onLeaveRoom={online.leaveRoom}
+              />
+            </>
+          ) : (
+            <ModeSelection
+              selectedMode={state.mode}
+              targetScore={state.targetScore}
+              onSelectMode={setMode}
+              onSelectTargetScore={setTargetScore}
+              onStart={startGame}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (state.phase === "setup") {
     return (
@@ -320,9 +359,9 @@ export default function BilliardsPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center pt-4 pb-8 px-4">
+    <div className="h-[calc(100vh-4rem)] flex flex-col items-center pt-4 pb-8 px-4">
       {/* Top bar */}
-      <div className="w-full max-w-[1200px] flex items-center justify-between mb-4">
+      <div className="w-full flex items-center justify-between mb-4 flex-shrink-0">
         <button
           onClick={reset}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border
@@ -367,20 +406,27 @@ export default function BilliardsPage() {
         </span>
       </div>
 
-      {/* Canvas */}
-      <BilliardsCanvas
-        balls={state.balls}
-        cueBallId={cueBallId}
-        phase={state.phase}
-        onShoot={shoot}
-        onPhysicsFrame={onPhysicsFrame}
-      />
+      {/* Canvas + Spin Selector */}
+      <div className="flex items-start gap-4 w-full justify-center">
+        <BilliardsCanvas
+          balls={state.balls}
+          cueBallId={cueBallId}
+          phase={state.phase}
+          onShoot={shoot}
+          onPhysicsFrame={onPhysicsFrame}
+        />
+        {state.phase === "aiming" && (
+          <div className="flex-shrink-0 mt-4">
+            <SpinSelector spin={state.aimSpin} onSpinChange={setAimSpin} />
+          </div>
+        )}
+      </div>
 
       {/* Instruction */}
       {state.phase === "aiming" && (
         <p className="mt-3 text-xs text-[#8892a4] text-center">
-          수구 근처를 클릭한 후 드래그하여 방향과 세기를 조절하세요. 놓으면
-          발사됩니다.
+          수구 근처를 클릭한 후 드래그하여 방향과 세기를 조절하세요. 당점으로
+          스핀을 설정할 수 있습니다.
         </p>
       )}
 

@@ -34,6 +34,15 @@ class RoomService {
         }
     }
 
+    @Synchronized
+    fun startGame(roomId: String): Room? {
+        val room = rooms[roomId] ?: return null
+        if (room.state != RoomState.WAITING) return null
+        if (room.players.size < 2) return null
+        room.state = RoomState.PLAYING
+        return room
+    }
+
     fun getRoom(roomId: String): Room? = rooms[roomId]
 
     fun getRoomsByGame(gameId: String): List<Room> =

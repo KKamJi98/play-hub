@@ -40,7 +40,7 @@ export default function GomokuBoard({
       <div
         className="relative select-none"
         style={{
-          width: "min(90vw, min(80vh, 600px))",
+          width: "min(90vw, 80vh)",
           aspectRatio: "1 / 1",
         }}
       >
@@ -134,14 +134,7 @@ export default function GomokuBoard({
           </svg>
 
           {/* Intersection click targets & stones */}
-          <div
-            className="absolute inset-0"
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
-              gridTemplateRows: `repeat(${BOARD_SIZE}, 1fr)`,
-            }}
-          >
+          <div className="absolute inset-0">
             {board.map((row, r) =>
               row.map((cell, c) => {
                 const isLastMove = lastMove?.row === r && lastMove?.col === c;
@@ -149,11 +142,22 @@ export default function GomokuBoard({
                 const isHovered =
                   isInteractive && hoverPos?.row === r && hoverPos?.col === c && cell === EMPTY;
 
+                const leftPct = (c / cellCount) * 100;
+                const topPct = (r / cellCount) * 100;
+                const cellSizePct = 100 / cellCount;
+
                 return (
                   <div
                     key={`${r}-${c}`}
-                    className="relative flex items-center justify-center"
-                    style={{ cursor: isInteractive && cell === EMPTY ? "pointer" : "default" }}
+                    className="absolute flex items-center justify-center"
+                    style={{
+                      left: `${leftPct}%`,
+                      top: `${topPct}%`,
+                      width: `${cellSizePct}%`,
+                      height: `${cellSizePct}%`,
+                      transform: "translate(-50%, -50%)",
+                      cursor: isInteractive && cell === EMPTY ? "pointer" : "default",
+                    }}
                     onClick={() => {
                       if (isInteractive && cell === EMPTY) {
                         onPlaceStone(r, c);

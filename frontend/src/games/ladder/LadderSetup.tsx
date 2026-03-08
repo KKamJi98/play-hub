@@ -19,20 +19,23 @@ export default function LadderSetup({
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
-  const canAdd = players.length < MAX_PLAYERS;
-  const canRemove = players.length > MIN_PLAYERS;
   const isValid = players.every((p) => p.trim() !== "") && prizes.every((p) => p.trim() !== "");
 
-  const addPlayer = () => {
-    if (!canAdd) return;
-    onPlayersChange([...players, `Player ${players.length + 1}`]);
-    onPrizesChange([...prizes, `Prize ${prizes.length + 1}`]);
-  };
-
-  const removePlayer = () => {
-    if (!canRemove) return;
-    onPlayersChange(players.slice(0, -1));
-    onPrizesChange(prizes.slice(0, -1));
+  const setPlayerCount = (count: number) => {
+    const clamped = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, count));
+    if (clamped > players.length) {
+      const newPlayers = [...players];
+      const newPrizes = [...prizes];
+      for (let i = players.length; i < clamped; i++) {
+        newPlayers.push(`Player ${i + 1}`);
+        newPrizes.push(`Prize ${i + 1}`);
+      }
+      onPlayersChange(newPlayers);
+      onPrizesChange(newPrizes);
+    } else if (clamped < players.length) {
+      onPlayersChange(players.slice(0, clamped));
+      onPrizesChange(prizes.slice(0, clamped));
+    }
   };
 
   const updatePlayer = (index: number, value: string) => {
@@ -63,38 +66,30 @@ export default function LadderSetup({
       </p>
 
       {/* Player count controls */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={removePlayer}
-          disabled={!canRemove}
-          className={`w-10 h-10 rounded-lg text-xl font-bold transition-all duration-200 border
-            ${
-              canRemove
-                ? isDark
-                  ? "border-white/20 bg-white/10 hover:bg-white/20 text-white"
-                  : "border-gray-300 bg-gray-100 hover:bg-gray-200 text-gray-700"
-                : "opacity-30 cursor-not-allowed border-transparent"
-            }`}
-        >
-          -
-        </button>
-        <span className="font-display text-lg font-semibold tracking-wide">
-          {players.length}명
-        </span>
-        <button
-          onClick={addPlayer}
-          disabled={!canAdd}
-          className={`w-10 h-10 rounded-lg text-xl font-bold transition-all duration-200 border
-            ${
-              canAdd
-                ? isDark
-                  ? "border-white/20 bg-white/10 hover:bg-white/20 text-white"
-                  : "border-gray-300 bg-gray-100 hover:bg-gray-200 text-gray-700"
-                : "opacity-30 cursor-not-allowed border-transparent"
-            }`}
-        >
-          +
-        </button>
+      <div className="flex flex-col items-center gap-2">
+        <span className="text-sm font-medium text-[#8892a4]">인원수</span>
+        <div className="flex gap-2">
+          {Array.from({ length: MAX_PLAYERS - MIN_PLAYERS + 1 }, (_, i) => i + MIN_PLAYERS).map(
+            (count) => (
+              <button
+                key={count}
+                onClick={() => setPlayerCount(count)}
+                className={`w-10 h-10 rounded-lg text-sm font-bold transition-all duration-200 border
+                  ${
+                    count === players.length
+                      ? isDark
+                        ? "border-[#00f0ff]/50 bg-[#00f0ff]/20 text-[#00f0ff]"
+                        : "border-blue-400 bg-blue-100 text-blue-700"
+                      : isDark
+                        ? "border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                        : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700"
+                  }`}
+              >
+                {count}
+              </button>
+            ),
+          )}
+        </div>
       </div>
 
       {/* Input rows */}

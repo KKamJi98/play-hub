@@ -39,3 +39,8 @@ export type BallId = "white" | "yellow" | "red1" | "red2";
 export const TARGET_SCORE_OPTIONS = [5, 10, 15, 20] as const;
 
 export const DEFAULT_TARGET_SCORE = 10;
+
+/** Spin constants */
+export const SPIN_TRANSFER_RATE = 0.015;
+export const SPIN_FRICTION = 0.98;
+export const MAX_SPIN = 1;

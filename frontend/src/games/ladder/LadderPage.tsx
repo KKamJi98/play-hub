@@ -63,6 +63,8 @@ export default function LadderPage() {
     setPrizes,
     generate,
     revealOne,
+    autoReveal,
+    stopAutoReveal,
     revealAll,
     reset,
     allRevealed,
@@ -126,30 +128,48 @@ export default function LadderPage() {
 
       {/* Control buttons */}
       {state.phase === "ladder" && !allRevealed && (
-        <div className="flex gap-4 mt-6">
+        <div className="flex gap-3 mt-6">
           <button
             onClick={revealOne}
-            disabled={state.animatingPath !== null}
-            className={`px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider text-sm
+            disabled={state.animatingPath !== null || state.autoRevealing}
+            className={`px-5 py-2.5 rounded-xl font-display font-semibold tracking-wider text-sm
                        bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
                        text-[#0a0e1a] shadow-lg shadow-cyan-500/25
                        hover:shadow-cyan-500/50 hover:scale-105
                        transition-all duration-300 active:scale-95
-                       ${state.animatingPath !== null ? "opacity-50 cursor-not-allowed" : ""}`}
+                       ${state.animatingPath !== null || state.autoRevealing ? "opacity-50 cursor-not-allowed" : ""}`}
           >
             한 명씩 공개
           </button>
           <button
+            onClick={state.autoRevealing ? stopAutoReveal : autoReveal}
+            disabled={state.animatingPath !== null && !state.autoRevealing}
+            className={`px-5 py-2.5 rounded-xl font-display font-semibold tracking-wider text-sm
+                       border transition-all duration-200
+                       ${
+                         state.autoRevealing
+                           ? isDark
+                             ? "border-red-400/50 bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                             : "border-red-400 bg-red-50 text-red-600 hover:bg-red-100"
+                           : isDark
+                             ? "border-[#00f0ff]/40 bg-[#00f0ff]/10 text-[#00f0ff] hover:bg-[#00f0ff]/20"
+                             : "border-blue-300 bg-blue-50 text-blue-600 hover:bg-blue-100"
+                       }
+                       ${state.animatingPath !== null && !state.autoRevealing ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            {state.autoRevealing ? "자동 중지" : "자동 공개"}
+          </button>
+          <button
             onClick={revealAll}
-            disabled={state.animatingPath !== null}
-            className={`px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider text-sm
+            disabled={state.animatingPath !== null || state.autoRevealing}
+            className={`px-5 py-2.5 rounded-xl font-display font-semibold tracking-wider text-sm
                        border transition-all duration-200
                        ${
                          isDark
                            ? "border-[#ffb800]/40 text-[#ffb800] hover:bg-[#ffb800]/10"
                            : "border-amber-400 text-amber-600 hover:bg-amber-50"
                        }
-                       ${state.animatingPath !== null ? "opacity-50 cursor-not-allowed" : ""}`}
+                       ${state.animatingPath !== null || state.autoRevealing ? "opacity-50 cursor-not-allowed" : ""}`}
           >
             전체 공개
           </button>
