@@ -8,7 +8,6 @@ import type { BallId } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
 import { useOnlineGame } from "../../hooks/useOnlineGame";
 import OnlineLobby from "../../components/online/OnlineLobby";
-import { Vec2 } from "./physics/vector";
 
 // ---- Mode options ----------------------------------------------------------
 
@@ -390,8 +389,10 @@ export default function BilliardsPage() {
     startGame,
     setAimSpin,
     setAimPower,
+    setAimDirection,
     shoot,
     applyOpponentShoot,
+    syncFromOpponent,
     onPhysicsFrame,
     continueAfterScore,
     reset,
@@ -411,23 +412,24 @@ export default function BilliardsPage() {
   const isMyTurn = !isOnlineMode || state.currentPlayer === myPlayerIndex;
   const canAim = state.phase === "aiming" && isMyTurn;
 
-  // ---- Online sync: send SHOOT action when local player shoots -------------
+  // ---- Shoot handler (called from "발사" button) ----------------------------
 
-  const handleShoot = useCallback(
-    (direction: Vec2, power: number) => {
-      // Build the shoot data for online sync
-      if (isOnlineMode && isMyTurn) {
-        const shootData: ShootData = {
-          direction: { x: direction.x, y: direction.y },
-          power,
-          spin: { x: state.aimSpin.x, y: state.aimSpin.y },
-        };
-        online.sendAction({ type: "SHOOT", ...shootData });
-      }
-      shoot(direction, power);
-    },
-    [isOnlineMode, isMyTurn, state.aimSpin, online, shoot],
-  );
+  const handleShoot = useCallback(() => {
+    const direction = state.aimDirection;
+    if (!direction) return;
+    const power = state.aimPower;
+
+    if (isOnlineMode && isMyTurn) {
+      const shootData: ShootData = {
+        direction: { x: direction.x, y: direction.y },
+        power,
+        spin: { x: state.aimSpin.x, y: state.aimSpin.y },
+        playerIndex: myPlayerIndex ?? 0,
+      };
+      online.sendAction({ type: "SHOOT", ...shootData });
+    }
+    shoot(direction, power);
+  }, [state.aimDirection, state.aimPower, state.aimSpin, isOnlineMode, isMyTurn, myPlayerIndex, online, shoot]);
 
   // ---- Online sync: receive opponent's SHOOT action ------------------------
 
@@ -441,6 +443,11 @@ export default function BilliardsPage() {
         direction?: { x: number; y: number };
         power?: number;
         spin?: { x: number; y: number };
+        playerIndex?: number;
+        scores?: [number, number];
+        nextPlayer?: number;
+        phase?: string;
+        winner?: number;
       };
     } | null;
 
@@ -448,14 +455,27 @@ export default function BilliardsPage() {
     lastGameStateRef.current = gameState;
 
     const lastAction = gameState.lastAction;
-    if (lastAction?.type === "SHOOT" && !isMyTurn && state.phase === "aiming") {
+    if (!lastAction) return;
+
+    // Receive opponent's SHOOT (use playerIndex instead of isMyTurn to avoid timing issues)
+    if (lastAction.type === "SHOOT" && lastAction.playerIndex !== myPlayerIndex && state.phase === "aiming") {
       applyOpponentShoot({
         direction: lastAction.direction ?? { x: 0, y: 0 },
         power: lastAction.power ?? 50,
         spin: lastAction.spin ?? { x: 0, y: 0 },
       });
     }
-  }, [online.state.gameState, isOnlineMode, isMyTurn, state.phase, applyOpponentShoot]);
+
+    // Receive opponent's SCORE_UPDATE
+    if (lastAction.type === "SCORE_UPDATE" && lastAction.playerIndex !== myPlayerIndex) {
+      syncFromOpponent({
+        scores: lastAction.scores ?? state.scores,
+        currentPlayer: (lastAction.nextPlayer ?? state.currentPlayer) as 0 | 1,
+        phase: (lastAction.phase ?? "aiming") as "aiming" | "scoring" | "gameOver",
+        winner: lastAction.winner ?? -1,
+      });
+    }
+  }, [online.state.gameState, isOnlineMode, myPlayerIndex, state.phase, state.scores, state.currentPlayer, applyOpponentShoot, syncFromOpponent]);
 
   // ---- Online sync: send SCORE_UPDATE after physics completes --------------
 
@@ -474,7 +494,10 @@ export default function BilliardsPage() {
         online.sendAction({
           type: "SCORE_UPDATE",
           scores: state.scores,
-          currentPlayer: state.currentPlayer,
+          nextPlayer: state.currentPlayer,
+          phase: state.phase,
+          winner: state.winner ?? -1,
+          playerIndex: myPlayerIndex ?? 0,
         });
       }
     }
@@ -590,14 +613,15 @@ export default function BilliardsPage() {
         </span>
       </div>
 
-      {/* Canvas + Spin Selector + Power Slider */}
+      {/* Canvas + Spin Selector + Power Slider + Shoot Button */}
       <div className="flex items-start gap-4 w-full max-w-5xl mx-auto justify-center">
         <BilliardsCanvas
           balls={state.balls}
           cueBallId={cueBallId}
           phase={state.phase}
           aimPower={state.aimPower}
-          onShoot={handleShoot}
+          aimDirection={state.aimDirection}
+          onAimChange={setAimDirection}
           onPhysicsFrame={onPhysicsFrame}
           disabled={!isMyTurn}
         />
@@ -605,6 +629,21 @@ export default function BilliardsPage() {
           <div className="flex-shrink-0 mt-4 flex flex-col items-center gap-4">
             <SpinSelector spin={state.aimSpin} onSpinChange={setAimSpin} />
             <PowerSlider value={state.aimPower} onChange={setAimPower} />
+            <button
+              onClick={handleShoot}
+              disabled={!state.aimDirection}
+              className={`px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider text-sm
+                transition-all duration-200 active:scale-95
+                ${
+                  state.aimDirection
+                    ? "bg-gradient-to-r from-[#00f0ff] to-[#0080ff] text-[#0a0e1a] shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/50 hover:scale-105"
+                    : isDark
+                      ? "bg-white/5 text-white/30 border border-white/10 cursor-not-allowed"
+                      : "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                }`}
+            >
+              발사
+            </button>
           </div>
         )}
       </div>
@@ -612,8 +651,8 @@ export default function BilliardsPage() {
       {/* Instruction */}
       {state.phase === "aiming" && isMyTurn && (
         <p className="mt-3 text-xs text-[#8892a4] text-center">
-          수구 근처를 클릭한 후 드래그하여 방향을 조절하세요. 오른쪽에서 당점과
-          파워를 설정할 수 있습니다.
+          수구 근처를 클릭+드래그하여 방향을 설정하세요. 당점과 파워를 조절한 후
+          &ldquo;발사&rdquo; 버튼을 누르면 샷이 실행됩니다.
         </p>
       )}
 

@@ -22,7 +22,7 @@ export const g = 9.81;
 export const MU_S = 0.2;
 
 /** Ball-cloth rolling resistance coefficient */
-export const MU_R = 0.01;
+export const MU_R = 0.015;
 
 /** Ball-cloth spinning friction coefficient */
 export const MU_SP = 0.044;
@@ -63,13 +63,13 @@ export const SUB_STEPS = 2;
 export const PHYSICS_DT = 1 / 120;
 
 /** Velocity threshold (m/s) below which a ball is considered stopped */
-export const STOP_THRESHOLD = 0.005;
+export const STOP_THRESHOLD = 0.02;
 
 /** Angular velocity threshold (rad/s) */
-export const OMEGA_THRESHOLD = 0.05;
+export const OMEGA_THRESHOLD = 0.15;
 
 /** Slip velocity threshold (m/s) for phase transition */
-export const SLIP_THRESHOLD = 0.005;
+export const SLIP_THRESHOLD = 0.02;
 
 // ---- Shot power mapping ---------------------------------------------------
 

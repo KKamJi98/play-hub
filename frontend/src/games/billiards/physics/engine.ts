@@ -63,19 +63,27 @@ function integrateBall(ball: Ball, dt: number): void {
     const slipMag = slip.length();
 
     if (slipMag > SLIP_THRESHOLD) {
-      const ux = slip.x / slipMag;
-      const uy = slip.y / slipMag;
+      const frictionAccel = MU_S * g * dt;
 
-      // Linear deceleration from sliding friction
-      ball.vel = new Vec2(
-        ball.vel.x - MU_S * g * ux * dt,
-        ball.vel.y - MU_S * g * uy * dt,
-      );
+      if (frictionAccel >= slipMag) {
+        // Friction would overshoot slip → snap to rolling condition
+        ball.omega.x = -ball.vel.y / R;
+        ball.omega.y = ball.vel.x / R;
+        // Don't modify vel — keep current velocity, just eliminate slip
+      } else {
+        // Normal friction application (safe — won't overshoot)
+        const ux = slip.x / slipMag;
+        const uy = slip.y / slipMag;
 
-      // Angular acceleration from sliding friction
-      const angFactor = (5 * MU_S * g) / (2 * R);
-      ball.omega.x += angFactor * uy * dt;
-      ball.omega.y -= angFactor * ux * dt;
+        ball.vel = new Vec2(
+          ball.vel.x - MU_S * g * ux * dt,
+          ball.vel.y - MU_S * g * uy * dt,
+        );
+
+        const angFactor = (5 * MU_S * g) / (2 * R);
+        ball.omega.x += angFactor * uy * dt;
+        ball.omega.y -= angFactor * ux * dt;
+      }
     }
 
     // Spinning friction always active
@@ -144,6 +152,14 @@ function integrateBall(ball: Ball, dt: number): void {
 
   // Determine new phase
   ball.phase = determinePhase(ball);
+
+  // Force stop if near-zero (safety net to prevent lingering micro-motion)
+  const totalOmega = Math.abs(ball.omega.x) + Math.abs(ball.omega.y) + Math.abs(ball.omega.z);
+  if (ball.vel.length() < STOP_THRESHOLD && totalOmega < OMEGA_THRESHOLD * 3) {
+    ball.vel = Vec2.zero();
+    ball.omega = { x: 0, y: 0, z: 0 };
+    ball.phase = "stationary";
+  }
 }
 
 // ---- Main step function ---------------------------------------------------

@@ -34,6 +34,7 @@ export interface ShootData {
   direction: { x: number; y: number };
   power: number;
   spin: { x: number; y: number };
+  playerIndex?: number;
 }
 
 export interface BilliardsState {
@@ -47,6 +48,7 @@ export interface BilliardsState {
   winner: 0 | 1 | null;
   aimSpin: Vec2;
   aimPower: number; // 0-100
+  aimDirection: Vec2 | null;
 }
 
 // ---- Helpers ---------------------------------------------------------------
@@ -128,6 +130,7 @@ export function useBilliardsGame() {
     winner: null,
     aimSpin: Vec2.zero(),
     aimPower: 50,
+    aimDirection: null,
   });
 
   /** Accumulated hits across the rolling phase for the current shot. */
@@ -154,6 +157,7 @@ export function useBilliardsGame() {
       winner: null,
       aimSpin: Vec2.zero(),
       aimPower: 50,
+      aimDirection: null,
     }));
     accumulatedHitsRef.current = new Set();
   }, []);
@@ -166,6 +170,10 @@ export function useBilliardsGame() {
 
   const setAimPower = useCallback((power: number) => {
     setState((prev) => ({ ...prev, aimPower: Math.max(0, Math.min(100, power)) }));
+  }, []);
+
+  const setAimDirection = useCallback((dir: Vec2 | null) => {
+    setState((prev) => ({ ...prev, aimDirection: dir }));
   }, []);
 
   // -- Shot ------------------------------------------------------------------
@@ -183,6 +191,7 @@ export function useBilliardsGame() {
         phase: "rolling" as const,
         aimSpin: Vec2.zero(),
         aimPower: 50,
+        aimDirection: null,
       };
     });
     accumulatedHitsRef.current = new Set();
@@ -205,6 +214,7 @@ export function useBilliardsGame() {
         ...prev,
         balls: newBalls,
         phase: "rolling" as const,
+        aimDirection: null,
       };
     });
     accumulatedHitsRef.current = new Set();
@@ -299,6 +309,32 @@ export function useBilliardsGame() {
     [],
   );
 
+  /**
+   * Sync state from opponent's SCORE_UPDATE action.
+   * Overwrites scores, currentPlayer, phase, and winner from remote data.
+   */
+  const syncFromOpponent = useCallback(
+    (data: {
+      scores: [number, number];
+      currentPlayer: 0 | 1;
+      phase: GamePhase;
+      winner: number;
+    }) => {
+      setState((prev) => {
+        const winner = data.winner >= 0 ? (data.winner as 0 | 1) : null;
+        const phase = winner !== null ? "gameOver" : data.phase === "scoring" ? "scoring" : "aiming";
+        return {
+          ...prev,
+          scores: data.scores,
+          currentPlayer: data.currentPlayer,
+          phase: phase as GamePhase,
+          winner,
+        };
+      });
+    },
+    [],
+  );
+
   /** Dismiss scoring overlay and go to aiming. */
   const continueAfterScore = useCallback(() => {
     setState((prev) => ({
@@ -323,6 +359,7 @@ export function useBilliardsGame() {
       winner: null,
       aimSpin: Vec2.zero(),
       aimPower: 50,
+      aimDirection: null,
     });
   }, []);
 
@@ -333,8 +370,10 @@ export function useBilliardsGame() {
     startGame,
     setAimSpin,
     setAimPower,
+    setAimDirection,
     shoot,
     applyOpponentShoot,
+    syncFromOpponent,
     onPhysicsFrame,
     continueAfterScore,
     reset,

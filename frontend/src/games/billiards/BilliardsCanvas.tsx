@@ -16,7 +16,8 @@ interface Props {
   cueBallId: BallId;
   phase: "aiming" | "rolling" | "scoring" | "gameOver" | "setup";
   aimPower: number; // 0-100
-  onShoot: (direction: Vec2, power: number) => void;
+  aimDirection: Vec2 | null;
+  onAimChange: (dir: Vec2 | null) => void;
   onPhysicsFrame: (
     balls: Ball[],
     frameHits: Set<BallId>,
@@ -134,7 +135,8 @@ export default function BilliardsCanvas({
   cueBallId,
   phase,
   aimPower,
-  onShoot,
+  aimDirection,
+  onAimChange,
   onPhysicsFrame,
   disabled = false,
 }: Props) {
@@ -142,9 +144,8 @@ export default function BilliardsCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 450 });
 
-  // Aiming state — direction only (no power from drag)
+  // Aiming state — dragging flag only (direction is external)
   const aimingRef = useRef(false);
-  const aimDirectionRef = useRef<Vec2 | null>(null);
 
   // Mutable balls for physics (engine mutates in place)
   const simBallsRef = useRef<Ball[]>([]);
@@ -223,11 +224,11 @@ export default function BilliardsCanvas({
       // Initial direction: from cue ball toward mouse
       const dir = pt.sub(cue.pos);
       if (dir.length() > 0.1) {
-        aimDirectionRef.current = cue.pos.sub(pt).normalize();
+        onAimChange(cue.pos.sub(pt).normalize());
       }
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [phase, disabled, canvasToTable, getCueBall],
+    [phase, disabled, canvasToTable, getCueBall, onAimChange],
   );
 
   const handlePointerMove = useCallback(
@@ -239,27 +240,29 @@ export default function BilliardsCanvas({
       // Direction: from mouse back toward cue ball (shoot opposite of drag)
       const dir = cue.pos.sub(pt);
       if (dir.length() > 0.1) {
-        aimDirectionRef.current = dir.normalize();
+        onAimChange(dir.normalize());
       }
     },
-    [canvasToTable, getCueBall],
+    [canvasToTable, getCueBall, onAimChange],
   );
 
   const handlePointerUp = useCallback(() => {
     if (!aimingRef.current) return;
     aimingRef.current = false;
+    // Direction stays set (aimDirection in parent) — user can adjust spin/power then fire
+  }, []);
 
-    const direction = aimDirectionRef.current;
-    if (!direction) {
-      aimDirectionRef.current = null;
-      return;
+  // ---- Rolling timeout safety net ------------------------------------------
+
+  const rollingStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (phase === "rolling") {
+      rollingStartRef.current = performance.now();
+    } else {
+      rollingStartRef.current = null;
     }
-
-    aimDirectionRef.current = null;
-
-    // Fire shot using external power value
-    onShoot(direction, aimPower);
-  }, [onShoot, aimPower]);
+  }, [phase]);
 
   // ---- Render & physics loop -----------------------------------------------
 
@@ -283,7 +286,16 @@ export default function BilliardsCanvas({
       let currentBalls = balls;
       if (phase === "rolling" && simBallsRef.current.length > 0) {
         const result = step(simBallsRef.current, cueBallId);
-        const stopped = allStopped(simBallsRef.current);
+        let stopped = allStopped(simBallsRef.current);
+
+        // Safety: force stop after 10 seconds of rolling
+        if (!stopped && rollingStartRef.current !== null) {
+          const elapsed = performance.now() - rollingStartRef.current;
+          if (elapsed > 10_000) {
+            stopped = true;
+          }
+        }
+
         onPhysicsFrame(simBallsRef.current, result.cueBallHits, stopped);
         currentBalls = simBallsRef.current;
       }
@@ -330,13 +342,12 @@ export default function BilliardsCanvas({
         drawBall(ctx, ball);
       }
 
-      // -- Aiming guide ----------------------------------------------------
-      if (phase === "aiming" && aimingRef.current && aimDirectionRef.current) {
+      // -- Aiming guide (visible when aimDirection is set, even after drag ends)
+      if (phase === "aiming" && aimDirection) {
         const cue = currentBalls.find((b) => b.id === cueBallId);
         if (cue) {
-          const dir = aimDirectionRef.current;
-          drawAimGuide(ctx, cue, dir, currentBalls, cueBallId);
-          drawCueStick(ctx, cue, dir, aimPower);
+          drawAimGuide(ctx, cue, aimDirection, currentBalls, cueBallId);
+          drawCueStick(ctx, cue, aimDirection, aimPower);
         }
       }
 
@@ -345,7 +356,7 @@ export default function BilliardsCanvas({
 
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [canvasSize, balls, phase, cueBallId, aimPower, onPhysicsFrame]);
+  }, [canvasSize, balls, phase, cueBallId, aimPower, aimDirection, onPhysicsFrame]);
 
   return (
     <div ref={containerRef} className="w-full">
