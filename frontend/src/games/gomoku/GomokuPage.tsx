@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useGomokuGame } from "./useGomokuGame";
 import GomokuBoard from "./GomokuBoard";
 import { BLACK, type Stone, type Difficulty, type GameMode } from "./constants";
@@ -122,10 +123,12 @@ function PlayerInfo({
   currentPlayer,
   mode,
   aiThinking,
+  waitingForOpponent,
 }: {
   currentPlayer: 1 | 2;
   mode: GameMode;
   aiThinking: boolean;
+  waitingForOpponent?: boolean;
 }) {
   const isBlackTurn = currentPlayer === BLACK;
   const playerLabel =
@@ -152,7 +155,10 @@ function PlayerInfo({
         />
         <span className="font-display text-sm font-semibold tracking-wide">{playerLabel}</span>
       </div>
-      {aiThinking && (
+      {waitingForOpponent && (
+        <span className="text-xs text-[#ffb800] animate-pulse font-medium">상대 턴 대기 중...</span>
+      )}
+      {!waitingForOpponent && aiThinking && (
         <span className="text-xs text-[#ffb800] animate-pulse font-medium">AI 생각 중...</span>
       )}
     </div>
@@ -243,6 +249,13 @@ export default function GomokuPage() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
+  // Auto-start game when guest receives GAME_STARTED (online phase becomes 'playing')
+  useEffect(() => {
+    if (online.state.phase === "playing" && state.gameStatus !== "playing") {
+      startGame();
+    }
+  }, [online.state.phase, state.gameStatus, startGame]);
+
   // Online mode: show lobby before game starts
   if (state.mode === "online" && state.gameStatus === "waiting") {
     return (
@@ -268,7 +281,7 @@ export default function GomokuPage() {
                 onConfirmNickname={online.confirmNickname}
                 onCreateRoom={online.createRoom}
                 onJoinRoom={online.joinRoom}
-                onStartGame={online.startGame}
+                onStartGame={() => { online.startGame(); startGame(); }}
                 onLeaveRoom={online.leaveRoom}
               />
             </>
@@ -366,7 +379,8 @@ export default function GomokuPage() {
         <PlayerInfo
           currentPlayer={displayCurrentPlayer}
           mode={state.mode}
-          aiThinking={state.aiThinking || (isOnlinePlaying && !isMyTurn)}
+          aiThinking={state.aiThinking}
+          waitingForOpponent={isOnlinePlaying && !isMyTurn}
         />
 
         <div className="text-xs text-[#8892a4]">
@@ -390,6 +404,35 @@ export default function GomokuPage() {
       {/* Game Over Modal */}
       {displayGameStatus === "finished" && (
         <GameOverModal winner={displayWinner} mode={state.mode} onReset={handleReset} />
+      )}
+
+      {/* Opponent left overlay */}
+      {online.state.opponentLeft === true && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div
+            className={`flex flex-col items-center gap-6 rounded-2xl border p-8 max-w-sm w-full mx-4
+              ${
+                isDark
+                  ? "bg-[#111827] border-white/10"
+                  : "bg-white border-gray-200 shadow-xl"
+              }`}
+          >
+            <div className="text-center">
+              <h2 className="font-display text-2xl font-bold tracking-wider">상대가 나갔습니다</h2>
+              <p className="mt-2 text-sm text-[#8892a4]">상대 플레이어가 게임을 떠났습니다.</p>
+            </div>
+            <button
+              onClick={handleReset}
+              className="px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider
+                         bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
+                         text-[#0a0e1a] shadow-lg shadow-cyan-500/25
+                         hover:shadow-cyan-500/50 hover:scale-105
+                         transition-all duration-300 active:scale-95"
+            >
+              나가기
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

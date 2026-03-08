@@ -6,7 +6,6 @@ import {
   TABLE_WIDTH,
   TABLE_HEIGHT,
   CUSHION_WIDTH,
-  MAX_POWER,
 } from "./constants";
 import type { BallId } from "./constants";
 
@@ -16,12 +15,14 @@ interface Props {
   balls: Ball[];
   cueBallId: BallId;
   phase: "aiming" | "rolling" | "scoring" | "gameOver" | "setup";
+  aimPower: number; // 0-100
   onShoot: (direction: Vec2, power: number) => void;
   onPhysicsFrame: (
     balls: Ball[],
     frameHits: Set<BallId>,
     stopped: boolean,
   ) => void;
+  disabled?: boolean; // true when it's opponent's turn in online mode
 }
 
 // ---- Constants for rendering -----------------------------------------------
@@ -35,23 +36,115 @@ const RAIL_COLOR = "#5d3a1a";
 const RAIL_DARK = "#3e2510";
 const DIAMOND_COLOR = "#d4af37";
 
+// ---- Ray-circle intersection -----------------------------------------------
+
+/**
+ * Returns distance along ray to first intersection with a circle, or null if no hit.
+ * `origin` and `dir` are in table pixel coordinates.
+ * `center` is the circle center, `radius` is the effective radius (2*BALL_RADIUS for ball-ball).
+ */
+function rayCircleIntersect(
+  origin: Vec2,
+  dir: Vec2,
+  center: Vec2,
+  radius: number,
+): number | null {
+  const oc = origin.sub(center);
+  const a = dir.dot(dir);
+  const b = 2 * oc.dot(dir);
+  const c = oc.dot(oc) - radius * radius;
+  const discriminant = b * b - 4 * a * c;
+  if (discriminant < 0) return null;
+  const sqrtD = Math.sqrt(discriminant);
+  const t1 = (-b - sqrtD) / (2 * a);
+  const t2 = (-b + sqrtD) / (2 * a);
+  // We want the nearest positive intersection
+  if (t1 > 0.001) return t1;
+  if (t2 > 0.001) return t2;
+  return null;
+}
+
+/**
+ * Returns distance along ray to intersection with a cushion (axis-aligned edge).
+ * Cushion edges are at x=0, x=TABLE_WIDTH, y=0, y=TABLE_HEIGHT.
+ * Returns { dist, normal } or null.
+ */
+function rayCushionIntersect(
+  origin: Vec2,
+  dir: Vec2,
+  ballRadius: number,
+): { dist: number; normal: Vec2; point: Vec2 } | null {
+  let bestDist = Infinity;
+  let bestNormal: Vec2 | null = null;
+
+  // Left wall: x = ballRadius
+  if (dir.x < -0.0001) {
+    const t = (ballRadius - origin.x) / dir.x;
+    if (t > 0.001 && t < bestDist) {
+      const y = origin.y + dir.y * t;
+      if (y >= 0 && y <= TABLE_HEIGHT) {
+        bestDist = t;
+        bestNormal = new Vec2(1, 0);
+      }
+    }
+  }
+  // Right wall: x = TABLE_WIDTH - ballRadius
+  if (dir.x > 0.0001) {
+    const t = (TABLE_WIDTH - ballRadius - origin.x) / dir.x;
+    if (t > 0.001 && t < bestDist) {
+      const y = origin.y + dir.y * t;
+      if (y >= 0 && y <= TABLE_HEIGHT) {
+        bestDist = t;
+        bestNormal = new Vec2(-1, 0);
+      }
+    }
+  }
+  // Top wall: y = ballRadius
+  if (dir.y < -0.0001) {
+    const t = (ballRadius - origin.y) / dir.y;
+    if (t > 0.001 && t < bestDist) {
+      const x = origin.x + dir.x * t;
+      if (x >= 0 && x <= TABLE_WIDTH) {
+        bestDist = t;
+        bestNormal = new Vec2(0, 1);
+      }
+    }
+  }
+  // Bottom wall: y = TABLE_HEIGHT - ballRadius
+  if (dir.y > 0.0001) {
+    const t = (TABLE_HEIGHT - ballRadius - origin.y) / dir.y;
+    if (t > 0.001 && t < bestDist) {
+      const x = origin.x + dir.x * t;
+      if (x >= 0 && x <= TABLE_WIDTH) {
+        bestDist = t;
+        bestNormal = new Vec2(0, -1);
+      }
+    }
+  }
+
+  if (bestNormal === null) return null;
+  const point = origin.add(dir.scale(bestDist));
+  return { dist: bestDist, normal: bestNormal, point };
+}
+
 // ---- Component -------------------------------------------------------------
 
 export default function BilliardsCanvas({
   balls,
   cueBallId,
   phase,
+  aimPower,
   onShoot,
   onPhysicsFrame,
+  disabled = false,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ w: 800, h: 450 });
 
-  // Aiming state
+  // Aiming state — direction only (no power from drag)
   const aimingRef = useRef(false);
-  const aimStartRef = useRef<Vec2 | null>(null);
-  const aimCurrentRef = useRef<Vec2 | null>(null);
+  const aimDirectionRef = useRef<Vec2 | null>(null);
 
   // Mutable balls for physics (engine mutates in place)
   const simBallsRef = useRef<Ball[]>([]);
@@ -105,12 +198,12 @@ export default function BilliardsCanvas({
         ...b,
         pos: new Vec2(b.pos.x, b.pos.y),
         vel: new Vec2(b.vel.x, b.vel.y),
-        spin: new Vec2(b.spin.x, b.spin.y),
+        omega: { x: b.omega.x, y: b.omega.y, z: b.omega.z },
       }));
     }
   }, [phase, balls]);
 
-  // ---- Mouse / touch handlers ----------------------------------------------
+  // ---- Mouse / touch handlers — direction only -----------------------------
 
   const getCueBall = useCallback((): Ball | undefined => {
     return balls.find((b) => b.id === cueBallId);
@@ -118,7 +211,7 @@ export default function BilliardsCanvas({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (phase !== "aiming") return;
+      if (phase !== "aiming" || disabled) return;
       const pt = canvasToTable(e.clientX, e.clientY);
       const cue = getCueBall();
       if (!cue) return;
@@ -127,49 +220,46 @@ export default function BilliardsCanvas({
       if (pt.distance(cue.pos) > cue.radius * 4) return;
 
       aimingRef.current = true;
-      aimStartRef.current = pt;
-      aimCurrentRef.current = pt;
+      // Initial direction: from cue ball toward mouse
+      const dir = pt.sub(cue.pos);
+      if (dir.length() > 0.1) {
+        aimDirectionRef.current = cue.pos.sub(pt).normalize();
+      }
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [phase, canvasToTable, getCueBall],
+    [phase, disabled, canvasToTable, getCueBall],
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
       if (!aimingRef.current) return;
-      aimCurrentRef.current = canvasToTable(e.clientX, e.clientY);
+      const pt = canvasToTable(e.clientX, e.clientY);
+      const cue = getCueBall();
+      if (!cue) return;
+      // Direction: from mouse back toward cue ball (shoot opposite of drag)
+      const dir = cue.pos.sub(pt);
+      if (dir.length() > 0.1) {
+        aimDirectionRef.current = dir.normalize();
+      }
     },
-    [canvasToTable],
+    [canvasToTable, getCueBall],
   );
 
   const handlePointerUp = useCallback(() => {
     if (!aimingRef.current) return;
     aimingRef.current = false;
 
-    const start = aimStartRef.current;
-    const current = aimCurrentRef.current;
-    const cue = getCueBall();
-    if (!start || !current || !cue) return;
-
-    // Direction: from mouse back to cue ball (shoot opposite of drag)
-    const dragVec = current.sub(cue.pos);
-    const power = Math.min(dragVec.length() / 20, MAX_POWER);
-
-    if (power < 0.5) {
-      // Too weak, cancel
-      aimStartRef.current = null;
-      aimCurrentRef.current = null;
+    const direction = aimDirectionRef.current;
+    if (!direction) {
+      aimDirectionRef.current = null;
       return;
     }
 
-    // Shot direction is opposite of the drag direction
-    const direction = cue.pos.sub(current).normalize();
+    aimDirectionRef.current = null;
 
-    aimStartRef.current = null;
-    aimCurrentRef.current = null;
-
-    onShoot(direction, power);
-  }, [getCueBall, onShoot]);
+    // Fire shot using external power value
+    onShoot(direction, aimPower);
+  }, [onShoot, aimPower]);
 
   // ---- Render & physics loop -----------------------------------------------
 
@@ -241,12 +331,12 @@ export default function BilliardsCanvas({
       }
 
       // -- Aiming guide ----------------------------------------------------
-      if (phase === "aiming" && aimingRef.current && aimCurrentRef.current) {
+      if (phase === "aiming" && aimingRef.current && aimDirectionRef.current) {
         const cue = currentBalls.find((b) => b.id === cueBallId);
         if (cue) {
-          drawAimGuide(ctx, cue, aimCurrentRef.current);
-          drawCueStick(ctx, cue, aimCurrentRef.current);
-          drawPowerGauge(ctx, cue, aimCurrentRef.current);
+          const dir = aimDirectionRef.current;
+          drawAimGuide(ctx, cue, dir, currentBalls, cueBallId);
+          drawCueStick(ctx, cue, dir, aimPower);
         }
       }
 
@@ -255,13 +345,13 @@ export default function BilliardsCanvas({
 
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [canvasSize, balls, phase, cueBallId, onPhysicsFrame]);
+  }, [canvasSize, balls, phase, cueBallId, aimPower, onPhysicsFrame]);
 
   return (
     <div ref={containerRef} className="w-full">
       <canvas
         ref={canvasRef}
-        style={{ width: canvasSize.w, height: canvasSize.h, cursor: phase === "aiming" ? "crosshair" : "default" }}
+        style={{ width: canvasSize.w, height: canvasSize.h, cursor: phase === "aiming" && !disabled ? "crosshair" : "default" }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -309,51 +399,156 @@ function drawBall(ctx: CanvasRenderingContext2D, ball: Ball) {
   ctx.fill();
 }
 
+/**
+ * Ghost ball aiming guide with ray-cast collision detection.
+ */
 function drawAimGuide(
   ctx: CanvasRenderingContext2D,
   cue: Ball,
-  mousePos: Vec2,
+  direction: Vec2,
+  allBalls: Ball[],
+  cueBallId: BallId,
 ) {
-  const direction = cue.pos.sub(mousePos).normalize();
-  const cx = CUSHION_WIDTH + cue.pos.x;
-  const cy = CUSHION_WIDTH + cue.pos.y;
-  const endX = cx + direction.x * 300;
-  const endY = cy + direction.y * 300;
+  const origin = cue.pos;
+  const dir = direction.normalize();
+
+  // Find closest intersection: balls or cushion
+  let closestBallDist = Infinity;
+  let hitBall: Ball | null = null;
+
+  for (const ball of allBalls) {
+    if (ball.id === cueBallId) continue;
+    // Ray-circle with effective radius = 2 * ball radius (ghost ball method)
+    const t = rayCircleIntersect(origin, dir, ball.pos, cue.radius + ball.radius);
+    if (t !== null && t < closestBallDist) {
+      closestBallDist = t;
+      hitBall = ball;
+    }
+  }
+
+  const cushionHit = rayCushionIntersect(origin, dir, cue.radius);
+  const cushionDist = cushionHit ? cushionHit.dist : Infinity;
+
+  const cx = CUSHION_WIDTH;
+  const cy = CUSHION_WIDTH;
 
   ctx.save();
-  ctx.strokeStyle = "rgba(255,255,255,0.4)";
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([6, 6]);
-  ctx.beginPath();
-  ctx.moveTo(cx, cy);
-  ctx.lineTo(endX, endY);
-  ctx.stroke();
-  ctx.setLineDash([]);
+
+  if (hitBall && closestBallDist < cushionDist) {
+    // --- Hitting a ball first ---
+    const ghostPos = origin.add(dir.scale(closestBallDist));
+
+    // Primary aim line: cue ball center → ghost ball position
+    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + origin.x, cy + origin.y);
+    ctx.lineTo(cx + ghostPos.x, cy + ghostPos.y);
+    ctx.stroke();
+
+    // Ghost ball outline
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx + ghostPos.x, cy + ghostPos.y, cue.radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Contact normal: from ghost ball center → target ball center
+    const contactNormal = hitBall.pos.sub(ghostPos).normalize();
+
+    // Target ball deflection line (along contact normal)
+    const targetDeflLen = 120;
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(cx + hitBall.pos.x, cy + hitBall.pos.y);
+    ctx.lineTo(
+      cx + hitBall.pos.x + contactNormal.x * targetDeflLen,
+      cy + hitBall.pos.y + contactNormal.y * targetDeflLen,
+    );
+    ctx.stroke();
+
+    // Cue ball deflection after collision (perpendicular to contact normal, simplified)
+    const cueDirAfter = dir.sub(contactNormal.scale(dir.dot(contactNormal)));
+    const cueDeflLen = cueDirAfter.length() > 0.01 ? 80 : 0;
+    if (cueDeflLen > 0) {
+      const cueDeflDir = cueDirAfter.normalize();
+      ctx.strokeStyle = "rgba(255,255,255,0.2)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx + ghostPos.x, cy + ghostPos.y);
+      ctx.lineTo(
+        cx + ghostPos.x + cueDeflDir.x * cueDeflLen,
+        cy + ghostPos.y + cueDeflDir.y * cueDeflLen,
+      );
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  } else if (cushionHit) {
+    // --- Hitting a cushion first ---
+    const hitPoint = cushionHit.point;
+
+    // Primary aim line: cue ball → cushion hit
+    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + origin.x, cy + origin.y);
+    ctx.lineTo(cx + hitPoint.x, cy + hitPoint.y);
+    ctx.stroke();
+
+    // Reflection direction (angle of incidence = angle of reflection)
+    const reflected = dir.reflect(cushionHit.normal);
+    const reflectLen = 100;
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(cx + hitPoint.x, cy + hitPoint.y);
+    ctx.lineTo(
+      cx + hitPoint.x + reflected.x * reflectLen,
+      cy + hitPoint.y + reflected.y * reflectLen,
+    );
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else {
+    // No hit detected — draw a long aim line
+    const lineLen = 500;
+    ctx.strokeStyle = "rgba(255,255,255,0.4)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(cx + origin.x, cy + origin.y);
+    ctx.lineTo(cx + origin.x + dir.x * lineLen, cy + origin.y + dir.y * lineLen);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   ctx.restore();
 }
 
 function drawCueStick(
   ctx: CanvasRenderingContext2D,
   cue: Ball,
-  mousePos: Vec2,
+  direction: Vec2,
+  power: number,
 ) {
-  const dragVec = mousePos.sub(cue.pos);
-  const power = Math.min(dragVec.length() / 20, MAX_POWER);
-  const pullBack = power * 8; // visual pull-back distance
+  // Cue stick is behind the cue ball, opposite to aim direction
+  const backDir = direction.scale(-1);
 
-  // Direction from mouse to cue ball (stick sits behind)
-  const direction = mousePos.sub(cue.pos).normalize();
+  // Pull-back distance scales with power (0-100)
+  const pullBack = (power / 100) * 60 + 8; // 8 to 68 pixels pull-back
 
   const cx = CUSHION_WIDTH + cue.pos.x;
   const cy = CUSHION_WIDTH + cue.pos.y;
 
   const stickStart = new Vec2(
-    cx + direction.x * (cue.radius + 4 + pullBack),
-    cy + direction.y * (cue.radius + 4 + pullBack),
+    cx + backDir.x * (cue.radius + 4 + pullBack),
+    cy + backDir.y * (cue.radius + 4 + pullBack),
   );
   const stickEnd = new Vec2(
-    stickStart.x + direction.x * 180,
-    stickStart.y + direction.y * 180,
+    stickStart.x + backDir.x * 180,
+    stickStart.y + backDir.y * 180,
   );
 
   ctx.save();
@@ -372,39 +567,10 @@ function drawCueStick(
   ctx.beginPath();
   ctx.moveTo(stickStart.x, stickStart.y);
   ctx.lineTo(
-    stickStart.x + direction.x * 12,
-    stickStart.y + direction.y * 12,
+    stickStart.x + backDir.x * 12,
+    stickStart.y + backDir.y * 12,
   );
   ctx.stroke();
-  ctx.restore();
-}
-
-function drawPowerGauge(
-  ctx: CanvasRenderingContext2D,
-  cue: Ball,
-  mousePos: Vec2,
-) {
-  const dragVec = mousePos.sub(cue.pos);
-  const power = Math.min(dragVec.length() / 20, MAX_POWER);
-  const ratio = power / MAX_POWER;
-
-  // Draw a small bar near the cue ball
-  const barX = CUSHION_WIDTH + cue.pos.x - 25;
-  const barY = CUSHION_WIDTH + cue.pos.y - cue.radius - 18;
-  const barW = 50;
-  const barH = 6;
-
-  ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
-
-  // Gradient from green to red
-  const grad = ctx.createLinearGradient(barX, barY, barX + barW, barY);
-  grad.addColorStop(0, "#4caf50");
-  grad.addColorStop(0.5, "#ff9800");
-  grad.addColorStop(1, "#f44336");
-  ctx.fillStyle = grad;
-  ctx.fillRect(barX, barY, barW * ratio, barH);
   ctx.restore();
 }
 

@@ -3,6 +3,7 @@ package com.playhub.room
 import com.playhub.game.GameHandler
 import com.playhub.game.GameMessageController
 import org.slf4j.LoggerFactory
+import org.springframework.messaging.handler.annotation.Header
 import org.springframework.messaging.handler.annotation.MessageMapping
 import org.springframework.messaging.handler.annotation.Payload
 import org.springframework.messaging.simp.SimpMessagingTemplate
@@ -21,9 +22,15 @@ class RoomMessageController(
         gameHandlers.associateBy { it.gameId }
 
     @MessageMapping("/room/join")
-    fun handleJoin(@Payload payload: Map<String, Any>) {
+    fun handleJoin(@Payload payload: Map<String, Any>, @Header("simpSessionId") wsSessionId: String) {
         val roomId = payload["roomId"] as? String ?: return
+        val playerSessionId = payload["sessionId"] as? String
         val room = roomService.getRoom(roomId) ?: return
+
+        // Register WebSocket session → (roomId, playerSessionId) mapping for disconnect cleanup
+        if (playerSessionId != null) {
+            roomService.registerSession(wsSessionId, roomId, playerSessionId)
+        }
 
         messagingTemplate.convertAndSend(
             "/topic/room/$roomId",
@@ -37,11 +44,15 @@ class RoomMessageController(
     }
 
     @MessageMapping("/room/leave")
-    fun handleLeave(@Payload payload: Map<String, Any>) {
+    fun handleLeave(@Payload payload: Map<String, Any>, @Header("simpSessionId") wsSessionId: String) {
         val roomId = payload["roomId"] as? String ?: return
-        val sessionId = payload["sessionId"] as? String ?: return
+        // Fall back to session mapping if sessionId is not in the message body
+        val sessionId = payload["sessionId"] as? String
+            ?: roomService.getSessionInfo(wsSessionId)?.second
+            ?: return
 
         roomService.leaveRoom(roomId, sessionId)
+        roomService.unregisterSession(wsSessionId)
         val room = roomService.getRoom(roomId)
 
         if (room != null) {

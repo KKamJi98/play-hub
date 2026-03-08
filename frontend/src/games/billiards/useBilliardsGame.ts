@@ -8,6 +8,9 @@ import {
   DEFAULT_TARGET_SCORE,
   TABLE_HEIGHT,
   TABLE_WIDTH,
+  MIN_SHOT_VELOCITY,
+  MAX_SHOT_VELOCITY,
+  MAX_SPIN_OMEGA,
 } from "./constants";
 import type { BallId } from "./constants";
 
@@ -27,6 +30,12 @@ export interface ShotResult {
   scored: boolean;
 }
 
+export interface ShootData {
+  direction: { x: number; y: number };
+  power: number;
+  spin: { x: number; y: number };
+}
+
 export interface BilliardsState {
   balls: Ball[];
   currentPlayer: 0 | 1;
@@ -37,6 +46,7 @@ export interface BilliardsState {
   mode: GameMode;
   winner: 0 | 1 | null;
   aimSpin: Vec2;
+  aimPower: number; // 0-100
 }
 
 // ---- Helpers ---------------------------------------------------------------
@@ -56,6 +66,54 @@ function cueBallIdForPlayer(player: 0 | 1): BallId {
   return player === 0 ? "white" : "yellow";
 }
 
+/**
+ * Convert power (0-100) to velocity magnitude (m/s).
+ */
+function powerToVelocity(power: number): number {
+  const t = Math.max(0, Math.min(100, power)) / 100;
+  return MIN_SHOT_VELOCITY + t * (MAX_SHOT_VELOCITY - MIN_SHOT_VELOCITY);
+}
+
+/**
+ * Convert SpinSelector output (Vec2 in [-1,1]) to omega {x, y, z}.
+ * - spin.x (left/right on selector) → omega.z (sidespin)
+ * - spin.y (up/down) → omega.y (topspin/backspin)
+ *   spin.y negative (top of selector) = topspin, spin.y positive = backspin
+ */
+function spinToOmega(spin: Vec2): { x: number; y: number; z: number } {
+  return {
+    x: 0, // not directly controlled by selector
+    y: -spin.y * MAX_SPIN_OMEGA, // negative spin.y = topspin = positive omega.y (forward roll in x)
+    z: spin.x * MAX_SPIN_OMEGA,  // positive spin.x = clockwise sidespin
+  };
+}
+
+/**
+ * Apply a shot to balls: set cue ball velocity and omega.
+ */
+function applyShot(
+  balls: Ball[],
+  cueBallId: BallId,
+  direction: Vec2,
+  power: number,
+  spin: Vec2,
+): Ball[] {
+  const velocityMag = powerToVelocity(power);
+  const dir = direction.normalize();
+  const vel = new Vec2(dir.x * velocityMag, dir.y * velocityMag);
+  const omega = spinToOmega(spin);
+
+  return balls.map((b) => {
+    if (b.id !== cueBallId) return b;
+    return {
+      ...b,
+      vel,
+      omega,
+      phase: "sliding" as const,
+    };
+  });
+}
+
 // ---- Hook ------------------------------------------------------------------
 
 export function useBilliardsGame() {
@@ -69,6 +127,7 @@ export function useBilliardsGame() {
     mode: "local",
     winner: null,
     aimSpin: Vec2.zero(),
+    aimPower: 50,
   });
 
   /** Accumulated hits across the rolling phase for the current shot. */
@@ -94,27 +153,59 @@ export function useBilliardsGame() {
       shotResult: null,
       winner: null,
       aimSpin: Vec2.zero(),
+      aimPower: 50,
     }));
     accumulatedHitsRef.current = new Set();
   }, []);
 
-  // -- Shot ------------------------------------------------------------------
+  // -- Aim controls ----------------------------------------------------------
 
   const setAimSpin = useCallback((spin: Vec2) => {
     setState((prev) => ({ ...prev, aimSpin: spin }));
   }, []);
+
+  const setAimPower = useCallback((power: number) => {
+    setState((prev) => ({ ...prev, aimPower: Math.max(0, Math.min(100, power)) }));
+  }, []);
+
+  // -- Shot ------------------------------------------------------------------
 
   const shoot = useCallback((direction: Vec2, power: number) => {
     setState((prev) => {
       if (prev.phase !== "aiming") return prev;
 
       const cueBallId = cueBallIdForPlayer(prev.currentPlayer);
-      const newBalls = prev.balls.map((b) => {
-        if (b.id !== cueBallId) return b;
-        return { ...b, vel: direction.normalize().scale(power), spin: prev.aimSpin };
-      });
+      const newBalls = applyShot(prev.balls, cueBallId, direction, power, prev.aimSpin);
 
-      return { ...prev, balls: newBalls, phase: "rolling" as const, aimSpin: Vec2.zero() };
+      return {
+        ...prev,
+        balls: newBalls,
+        phase: "rolling" as const,
+        aimSpin: Vec2.zero(),
+        aimPower: 50,
+      };
+    });
+    accumulatedHitsRef.current = new Set();
+  }, []);
+
+  /**
+   * Apply an opponent's shot from online sync.
+   * This applies the exact same shot parameters to ensure deterministic physics.
+   */
+  const applyOpponentShoot = useCallback((data: ShootData) => {
+    setState((prev) => {
+      if (prev.phase !== "aiming") return prev;
+
+      const cueBallId = cueBallIdForPlayer(prev.currentPlayer);
+      const direction = new Vec2(data.direction.x, data.direction.y);
+      const spin = new Vec2(data.spin.x, data.spin.y);
+      const newBalls = applyShot(prev.balls, cueBallId, direction, data.power, spin);
+
+      return {
+        ...prev,
+        balls: newBalls,
+        phase: "rolling" as const,
+      };
     });
     accumulatedHitsRef.current = new Set();
   }, []);
@@ -231,6 +322,7 @@ export function useBilliardsGame() {
       mode: "local",
       winner: null,
       aimSpin: Vec2.zero(),
+      aimPower: 50,
     });
   }, []);
 
@@ -240,7 +332,9 @@ export function useBilliardsGame() {
     setTargetScore,
     startGame,
     setAimSpin,
+    setAimPower,
     shoot,
+    applyOpponentShoot,
     onPhysicsFrame,
     continueAfterScore,
     reset,

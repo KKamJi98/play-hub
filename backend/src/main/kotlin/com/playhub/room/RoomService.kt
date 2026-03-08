@@ -9,6 +9,19 @@ class RoomService {
 
     private val rooms = ConcurrentHashMap<String, Room>()
 
+    // WebSocket sessionId → (roomId, playerSessionId)
+    private val sessionMap = ConcurrentHashMap<String, Pair<String, String>>()
+
+    fun registerSession(wsSessionId: String, roomId: String, playerSessionId: String) {
+        sessionMap[wsSessionId] = Pair(roomId, playerSessionId)
+    }
+
+    fun unregisterSession(wsSessionId: String) {
+        sessionMap.remove(wsSessionId)
+    }
+
+    fun getSessionInfo(wsSessionId: String): Pair<String, String>? = sessionMap[wsSessionId]
+
     fun createRoom(gameId: String, settings: Map<String, Any> = emptyMap()): Room {
         val room = Room(
             id = UUID.randomUUID().toString().substring(0, 8),

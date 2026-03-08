@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useStompClient } from "./useStompClient";
 
-export type OnlinePhase = "nickname" | "lobby" | "waiting" | "playing";
+export type OnlinePhase = "nickname" | "lobby" | "waiting" | "playing" | "finished";
 
 export interface OnlinePlayer {
   sessionId: string;
@@ -20,31 +20,53 @@ export interface OnlineGameState {
   phase: OnlinePhase;
   nickname: string;
   roomId: string | null;
+  playerSessionId: string | null;
   playerIndex: number | null;
   players: OnlinePlayer[];
   isHost: boolean;
   gameState: unknown;
   gameResult: { isOver: boolean; winner: number | null; reason: string | null } | null;
+  opponentLeft: boolean;
+}
+
+export interface UseOnlineGameOptions {
+  onGameStarted?: () => void;
 }
 
 const NICKNAME_KEY = "play-hub-nickname";
 
-export function useOnlineGame(gameId: string) {
+export function useOnlineGame(gameId: string, options?: UseOnlineGameOptions) {
   const { connected, subscribe, publish } = useStompClient();
 
   const [state, setState] = useState<OnlineGameState>({
     phase: "nickname",
     nickname: typeof localStorage !== "undefined" ? localStorage.getItem(NICKNAME_KEY) ?? "" : "",
     roomId: null,
+    playerSessionId: null,
     playerIndex: null,
     players: [],
     isHost: false,
     gameState: null,
     gameResult: null,
+    opponentLeft: false,
   });
+
+  const onGameStartedRef = useRef(options?.onGameStarted);
+  onGameStartedRef.current = options?.onGameStarted;
 
   const unsubRoomRef = useRef<(() => void) | null>(null);
   const unsubGameRef = useRef<(() => void) | null>(null);
+
+  const safePublish = useCallback(
+    (destination: string, body: unknown) => {
+      if (!connected) {
+        console.warn(`[useOnlineGame] STOMP not connected, skipping publish to ${destination}`);
+        return;
+      }
+      publish(destination, body);
+    },
+    [connected, publish],
+  );
 
   const setNickname = useCallback((nickname: string) => {
     setState((s) => ({ ...s, nickname }));
@@ -62,14 +84,35 @@ export function useOnlineGame(gameId: string) {
       unsubRoomRef.current?.();
       unsubRoomRef.current = subscribe(`/topic/room/${roomId}`, (msg) => {
         const data = JSON.parse(msg.body);
-        if (data.type === "PLAYER_JOINED" || data.type === "PLAYER_LEFT") {
+        if (data.type === "PLAYER_JOINED") {
           setState((s) => ({ ...s, players: data.players ?? s.players }));
+        } else if (data.type === "PLAYER_LEFT") {
+          setState((s) => {
+            const isPlaying = s.phase === "playing";
+            return {
+              ...s,
+              players: data.players ?? s.players,
+              opponentLeft: isPlaying ? true : s.opponentLeft,
+              phase: isPlaying ? "finished" : s.phase,
+            };
+          });
+        } else if (data.type === "OPPONENT_DISCONNECTED") {
+          setState((s) => {
+            const isPlaying = s.phase === "playing";
+            return {
+              ...s,
+              players: data.players ?? s.players,
+              opponentLeft: isPlaying ? true : s.opponentLeft,
+              phase: isPlaying ? "finished" : s.phase,
+            };
+          });
         } else if (data.type === "GAME_STARTED") {
           setState((s) => ({
             ...s,
             phase: "playing",
             gameState: data.initialState ?? null,
           }));
+          onGameStartedRef.current?.();
         }
       });
 
@@ -104,15 +147,21 @@ export function useOnlineGame(gameId: string) {
     const joinData = await joinRes.json();
 
     subscribeToRoom(room.id);
+    const sid = joinData.sessionId ?? null;
     setState((s) => ({
       ...s,
       phase: "waiting",
       roomId: room.id,
+      playerSessionId: sid,
       playerIndex: joinData.playerIndex ?? 0,
       players: joinData.players ?? [],
       isHost: true,
     }));
-  }, [gameId, state.nickname, subscribeToRoom]);
+    // Register WebSocket session mapping for disconnect cleanup
+    if (sid) {
+      safePublish("/app/room/join", { roomId: room.id, sessionId: sid });
+    }
+  }, [gameId, state.nickname, subscribeToRoom, safePublish]);
 
   const joinRoom = useCallback(
     async (roomId: string) => {
@@ -129,38 +178,44 @@ export function useOnlineGame(gameId: string) {
       const joinData = await joinRes.json();
 
       subscribeToRoom(roomId);
+      const sid = joinData.sessionId ?? null;
       setState((s) => ({
         ...s,
         phase: "waiting",
         roomId,
+        playerSessionId: sid,
         playerIndex: joinData.playerIndex ?? 1,
         players: joinData.players ?? [],
         isHost: false,
       }));
+      // Register WebSocket session mapping for disconnect cleanup
+      if (sid) {
+        safePublish("/app/room/join", { roomId, sessionId: sid });
+      }
     },
-    [state.nickname, subscribeToRoom],
+    [state.nickname, subscribeToRoom, safePublish],
   );
 
   const startGame = useCallback(() => {
     if (!state.roomId) return;
-    publish("/app/room/start", { roomId: state.roomId });
-  }, [state.roomId, publish]);
+    safePublish("/app/room/start", { roomId: state.roomId });
+  }, [state.roomId, safePublish]);
 
   const sendAction = useCallback(
     (action: unknown) => {
       if (!state.roomId || state.playerIndex === null) return;
-      publish("/app/game/action", {
+      safePublish("/app/game/action", {
         roomId: state.roomId,
         playerIndex: state.playerIndex,
         action,
       });
     },
-    [state.roomId, state.playerIndex, publish],
+    [state.roomId, state.playerIndex, safePublish],
   );
 
   const leaveRoom = useCallback(() => {
     if (state.roomId) {
-      publish("/app/room/leave", { roomId: state.roomId });
+      safePublish("/app/room/leave", { roomId: state.roomId, sessionId: state.playerSessionId });
     }
     unsubRoomRef.current?.();
     unsubGameRef.current?.();
@@ -168,13 +223,15 @@ export function useOnlineGame(gameId: string) {
       ...s,
       phase: "lobby",
       roomId: null,
+      playerSessionId: null,
       playerIndex: null,
       players: [],
       isHost: false,
       gameState: null,
       gameResult: null,
+      opponentLeft: false,
     }));
-  }, [state.roomId, publish]);
+  }, [state.roomId, state.playerSessionId, safePublish]);
 
   // Cleanup on unmount
   useEffect(() => {

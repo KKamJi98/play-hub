@@ -72,6 +72,7 @@ class RoomController(
 
         return ResponseEntity.ok(mapOf(
             "playerIndex" to playerIndex,
+            "sessionId" to player.sessionId,
             "players" to playersList
         ))
     }

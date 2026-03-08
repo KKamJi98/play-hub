@@ -46,6 +46,16 @@ export class Vec2 {
     return this.sub(v).length();
   }
 
+  /** Cross product (scalar result for 2D: this.x * v.y - this.y * v.x). */
+  cross(v: Vec2): number {
+    return this.x * v.y - this.y * v.x;
+  }
+
+  /** Perpendicular vector (rotated 90 degrees counter-clockwise). */
+  perp(): Vec2 {
+    return new Vec2(-this.y, this.x);
+  }
+
   static zero(): Vec2 {
     return new Vec2(0, 0);
   }

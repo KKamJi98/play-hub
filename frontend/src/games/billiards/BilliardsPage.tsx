@@ -1,5 +1,6 @@
+import { useCallback, useEffect, useRef } from "react";
 import { useBilliardsGame } from "./useBilliardsGame";
-import type { GameMode } from "./useBilliardsGame";
+import type { GameMode, ShootData } from "./useBilliardsGame";
 import BilliardsCanvas from "./BilliardsCanvas";
 import SpinSelector from "./SpinSelector";
 import { TARGET_SCORE_OPTIONS, BALL_COLORS } from "./constants";
@@ -7,6 +8,7 @@ import type { BallId } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
 import { useOnlineGame } from "../../hooks/useOnlineGame";
 import OnlineLobby from "../../components/online/OnlineLobby";
+import { Vec2 } from "./physics/vector";
 
 // ---- Mode options ----------------------------------------------------------
 
@@ -279,6 +281,105 @@ function GameOverModal({
   );
 }
 
+// ---- PowerSlider component -------------------------------------------------
+
+function PowerSlider({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const handlePointer = useCallback(
+    (e: React.PointerEvent) => {
+      const el = trackRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      // Vertical: top = 100%, bottom = 0%
+      const y = e.clientY - rect.top;
+      const ratio = 1 - Math.max(0, Math.min(1, y / rect.height));
+      onChange(Math.round(ratio * 100));
+    },
+    [onChange],
+  );
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      handlePointer(e);
+    },
+    [handlePointer],
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.buttons === 0) return;
+      handlePointer(e);
+    },
+    [handlePointer],
+  );
+
+  const TRACK_H = 140;
+  const TRACK_W = 24;
+  const fillRatio = value / 100;
+
+  // Color based on power level
+  const getColor = (ratio: number): string => {
+    if (ratio < 0.33) return "#4caf50";
+    if (ratio < 0.66) return "#ff9800";
+    return "#f44336";
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <span className="text-[10px] font-medium text-[#8892a4]">파워</span>
+      <div
+        ref={trackRef}
+        className="relative cursor-pointer rounded-full border"
+        style={{
+          width: TRACK_W,
+          height: TRACK_H,
+          background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+          borderColor: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)",
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+      >
+        {/* Filled portion (from bottom) */}
+        <div
+          className="absolute bottom-0 left-0 right-0 rounded-b-full transition-all duration-75"
+          style={{
+            height: `${fillRatio * 100}%`,
+            background: `linear-gradient(to top, ${getColor(0)}, ${getColor(fillRatio)})`,
+            opacity: 0.8,
+          }}
+        />
+        {/* Handle / indicator */}
+        <div
+          className="absolute left-1/2 -translate-x-1/2 rounded-full"
+          style={{
+            width: TRACK_W + 4,
+            height: 8,
+            bottom: `calc(${fillRatio * 100}% - 4px)`,
+            background: getColor(fillRatio),
+            boxShadow: `0 0 6px ${getColor(fillRatio)}80`,
+          }}
+        />
+      </div>
+      <span
+        className="text-xs font-bold tabular-nums"
+        style={{ color: getColor(fillRatio) }}
+      >
+        {value}%
+      </span>
+    </div>
+  );
+}
+
 // ---- Main page component ---------------------------------------------------
 
 export default function BilliardsPage() {
@@ -288,20 +389,100 @@ export default function BilliardsPage() {
     setTargetScore,
     startGame,
     setAimSpin,
+    setAimPower,
     shoot,
+    applyOpponentShoot,
     onPhysicsFrame,
     continueAfterScore,
     reset,
   } = useBilliardsGame();
 
-  const online = useOnlineGame("billiards");
+  const online = useOnlineGame("billiards", { onGameStarted: startGame });
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
   const cueBallId: BallId =
     state.currentPlayer === 0 ? "white" : "yellow";
 
-  // Online mode: show lobby in setup
+  // ---- Online sync: detect if it's our turn --------------------------------
+
+  const isOnlineMode = state.mode === "online" && online.state.phase === "playing";
+  const myPlayerIndex = online.state.playerIndex;
+  const isMyTurn = !isOnlineMode || state.currentPlayer === myPlayerIndex;
+  const canAim = state.phase === "aiming" && isMyTurn;
+
+  // ---- Online sync: send SHOOT action when local player shoots -------------
+
+  const handleShoot = useCallback(
+    (direction: Vec2, power: number) => {
+      // Build the shoot data for online sync
+      if (isOnlineMode && isMyTurn) {
+        const shootData: ShootData = {
+          direction: { x: direction.x, y: direction.y },
+          power,
+          spin: { x: state.aimSpin.x, y: state.aimSpin.y },
+        };
+        online.sendAction({ type: "SHOOT", ...shootData });
+      }
+      shoot(direction, power);
+    },
+    [isOnlineMode, isMyTurn, state.aimSpin, online, shoot],
+  );
+
+  // ---- Online sync: receive opponent's SHOOT action ------------------------
+
+  const lastGameStateRef = useRef<unknown>(null);
+
+  useEffect(() => {
+    if (!isOnlineMode) return;
+    const gameState = online.state.gameState as {
+      lastAction?: {
+        type?: string;
+        direction?: { x: number; y: number };
+        power?: number;
+        spin?: { x: number; y: number };
+      };
+    } | null;
+
+    if (!gameState || gameState === lastGameStateRef.current) return;
+    lastGameStateRef.current = gameState;
+
+    const lastAction = gameState.lastAction;
+    if (lastAction?.type === "SHOOT" && !isMyTurn && state.phase === "aiming") {
+      applyOpponentShoot({
+        direction: lastAction.direction ?? { x: 0, y: 0 },
+        power: lastAction.power ?? 50,
+        spin: lastAction.spin ?? { x: 0, y: 0 },
+      });
+    }
+  }, [online.state.gameState, isOnlineMode, isMyTurn, state.phase, applyOpponentShoot]);
+
+  // ---- Online sync: send SCORE_UPDATE after physics completes --------------
+
+  // Track who shot (by phase transition), then send score when state is updated
+  const prevPhaseRef = useRef(state.phase);
+  const shooterRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    // When rolling starts, record who is shooting
+    if (state.phase === "rolling" && prevPhaseRef.current !== "rolling") {
+      shooterRef.current = state.currentPlayer;
+    }
+    // When rolling ends, send score update if we were the shooter
+    if (prevPhaseRef.current === "rolling" && state.phase !== "rolling") {
+      if (isOnlineMode && shooterRef.current === myPlayerIndex) {
+        online.sendAction({
+          type: "SCORE_UPDATE",
+          scores: state.scores,
+          currentPlayer: state.currentPlayer,
+        });
+      }
+    }
+    prevPhaseRef.current = state.phase;
+  }, [state.phase, state.scores, state.currentPlayer, isOnlineMode, myPlayerIndex, online]);
+
+  // ---- Render: Online mode setup / lobby -----------------------------------
+
   if (state.mode === "online" && state.phase === "setup") {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
@@ -382,7 +563,9 @@ export default function BilliardsPage() {
 
         <div className="text-xs text-[#8892a4] font-display">
           {state.phase === "aiming"
-            ? "조준 중"
+            ? isMyTurn
+              ? "조준 중"
+              : "상대방 차례..."
             : state.phase === "rolling"
               ? "진행 중..."
               : ""}
@@ -403,30 +586,41 @@ export default function BilliardsPage() {
           }}
         >
           {state.currentPlayer === 0 ? "Player 1 (흰공)" : "Player 2 (노란공)"}
+          {isOnlineMode && isMyTurn && " (나)"}
         </span>
       </div>
 
-      {/* Canvas + Spin Selector */}
+      {/* Canvas + Spin Selector + Power Slider */}
       <div className="flex items-start gap-4 w-full max-w-5xl mx-auto justify-center">
         <BilliardsCanvas
           balls={state.balls}
           cueBallId={cueBallId}
           phase={state.phase}
-          onShoot={shoot}
+          aimPower={state.aimPower}
+          onShoot={handleShoot}
           onPhysicsFrame={onPhysicsFrame}
+          disabled={!isMyTurn}
         />
-        {state.phase === "aiming" && (
-          <div className="flex-shrink-0 mt-4">
+        {canAim && (
+          <div className="flex-shrink-0 mt-4 flex flex-col items-center gap-4">
             <SpinSelector spin={state.aimSpin} onSpinChange={setAimSpin} />
+            <PowerSlider value={state.aimPower} onChange={setAimPower} />
           </div>
         )}
       </div>
 
       {/* Instruction */}
-      {state.phase === "aiming" && (
+      {state.phase === "aiming" && isMyTurn && (
         <p className="mt-3 text-xs text-[#8892a4] text-center">
-          수구 근처를 클릭한 후 드래그하여 방향과 세기를 조절하세요. 당점으로
-          스핀을 설정할 수 있습니다.
+          수구 근처를 클릭한 후 드래그하여 방향을 조절하세요. 오른쪽에서 당점과
+          파워를 설정할 수 있습니다.
+        </p>
+      )}
+
+      {/* Waiting for opponent */}
+      {state.phase === "aiming" && !isMyTurn && isOnlineMode && (
+        <p className="mt-3 text-xs text-[#8892a4] text-center animate-pulse">
+          상대방이 조준 중입니다...
         </p>
       )}
 

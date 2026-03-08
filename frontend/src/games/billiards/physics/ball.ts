@@ -1,15 +1,28 @@
 import { Vec2 } from "./vector";
-import { STOP_THRESHOLD, SPIN_TRANSFER_RATE, SPIN_FRICTION } from "../constants";
 import type { BallId } from "../constants";
+
+// ---- Types ----------------------------------------------------------------
+
+/** 3-axis angular velocity (rad/s) */
+export interface Omega3 {
+  x: number; // angular vel around x-axis (affects forward/backward roll in y direction)
+  y: number; // angular vel around y-axis (affects forward/backward roll in x direction)
+  z: number; // angular vel around z-axis (sidespin / massé, top-down view)
+}
+
+export type BallPhase = "sliding" | "rolling" | "spinning" | "stationary";
 
 export interface Ball {
   id: BallId;
-  pos: Vec2;
-  vel: Vec2;
-  spin: Vec2;
-  radius: number;
+  pos: Vec2;           // position in pixel coordinates
+  vel: Vec2;           // velocity in m/s (physics space)
+  omega: Omega3;       // angular velocity in rad/s
+  phase: BallPhase;
+  radius: number;      // pixel radius for rendering
   color: string;
 }
+
+// ---- Factory --------------------------------------------------------------
 
 /** Create a fresh ball at the given position (at rest). */
 export function createBall(
@@ -19,30 +32,28 @@ export function createBall(
   radius: number,
   color: string,
 ): Ball {
-  return { id, pos: new Vec2(x, y), vel: Vec2.zero(), spin: Vec2.zero(), radius, color };
+  return {
+    id,
+    pos: new Vec2(x, y),
+    vel: Vec2.zero(),
+    omega: { x: 0, y: 0, z: 0 },
+    phase: "stationary",
+    radius,
+    color,
+  };
 }
 
-/** Apply velocity & friction for one sub-step. Mutates `ball`. */
-export function updateBall(ball: Ball, dt: number, friction: number): void {
-  // Spin → velocity transfer
-  if (ball.spin.lengthSq() > 0.0001) {
-    ball.vel = ball.vel.add(ball.spin.scale(SPIN_TRANSFER_RATE * dt));
-    ball.spin = ball.spin.scale(SPIN_FRICTION);
-    if (ball.spin.lengthSq() < 0.0001) {
-      ball.spin = Vec2.zero();
-    }
-  }
+// ---- Helpers --------------------------------------------------------------
 
-  ball.pos = ball.pos.add(ball.vel.scale(dt));
-  ball.vel = ball.vel.scale(friction);
-
-  // Clamp tiny velocities to zero
-  if (ball.vel.lengthSq() < STOP_THRESHOLD * STOP_THRESHOLD) {
-    ball.vel = Vec2.zero();
-  }
+export function zeroOmega(): Omega3 {
+  return { x: 0, y: 0, z: 0 };
 }
 
-/** Whether the ball has meaningful velocity. */
+export function cloneOmega(o: Omega3): Omega3 {
+  return { x: o.x, y: o.y, z: o.z };
+}
+
+/** Whether the ball has meaningful linear velocity or spin. */
 export function isMoving(ball: Ball): boolean {
-  return ball.vel.lengthSq() > STOP_THRESHOLD * STOP_THRESHOLD;
+  return ball.phase !== "stationary";
 }
