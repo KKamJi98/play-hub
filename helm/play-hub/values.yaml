@@ -1,7 +1,7 @@
 frontend:
   image:
     repository: ghcr.io/kkamji98/play-hub-frontend
-    tag: 835e9ed756123c241e1a2355e9598d7947722cd3 # frontend-tag
+    tag: 79a93a45e67398dc91655d1b58fcdd85d04b8034 # frontend-tag
     pullPolicy: IfNotPresent
   containerPort: 8080
   replicas: 1
@@ -18,7 +18,7 @@ frontend:
 backend:
   image:
     repository: ghcr.io/kkamji98/play-hub-backend
-    tag: 835e9ed756123c241e1a2355e9598d7947722cd3 # backend-tag
+    tag: 79a93a45e67398dc91655d1b58fcdd85d04b8034 # backend-tag
     pullPolicy: IfNotPresent
   replicas: 1
   service:
