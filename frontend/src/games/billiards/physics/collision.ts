@@ -7,7 +7,6 @@ import {
   MU_C,
   M,
   R,
-  toMeters,
   TABLE_WIDTH,
   TABLE_HEIGHT,
 } from "../constants";
@@ -98,27 +97,26 @@ export function separateBalls(
  */
 export function resolveBallCushion(ball: Ball): void {
   const r = ball.radius;
-  const rMeters = toMeters(r); // ball radius in meters (for omega calc)
 
   // Left wall
   if (ball.pos.x - r < 0) {
     ball.pos = new Vec2(r, ball.pos.y);
-    applyCushionBounce(ball, new Vec2(1, 0), rMeters);
+    applyCushionBounce(ball, new Vec2(1, 0));
   }
   // Right wall
   if (ball.pos.x + r > TABLE_WIDTH) {
     ball.pos = new Vec2(TABLE_WIDTH - r, ball.pos.y);
-    applyCushionBounce(ball, new Vec2(-1, 0), rMeters);
+    applyCushionBounce(ball, new Vec2(-1, 0));
   }
   // Top wall
   if (ball.pos.y - r < 0) {
     ball.pos = new Vec2(ball.pos.x, r);
-    applyCushionBounce(ball, new Vec2(0, 1), rMeters);
+    applyCushionBounce(ball, new Vec2(0, 1));
   }
   // Bottom wall
   if (ball.pos.y + r > TABLE_HEIGHT) {
     ball.pos = new Vec2(ball.pos.x, TABLE_HEIGHT - r);
-    applyCushionBounce(ball, new Vec2(0, -1), rMeters);
+    applyCushionBounce(ball, new Vec2(0, -1));
   }
 }
 
@@ -126,7 +124,7 @@ export function resolveBallCushion(ball: Ball): void {
  * Apply cushion bounce physics along a given inward normal.
  * Han 2005 simplified: v_n' = -e_c * v_n, v_t' = (5/7)*v_t + (2/7)*R*ωz
  */
-function applyCushionBounce(ball: Ball, inwardNormal: Vec2, _rMeters: number): void {
+function applyCushionBounce(ball: Ball, inwardNormal: Vec2): void {
   const vn = ball.vel.dot(inwardNormal);
 
   // Only bounce if moving into the cushion
@@ -142,10 +140,10 @@ function applyCushionBounce(ball: Ball, inwardNormal: Vec2, _rMeters: number): v
 
   const vnNew = -E_C * vn;
   const vtNew = vt + Jt / M;
+  const deltaOmegaZ = (-5 * Jt) / (2 * M * R);
 
   ball.vel = inwardNormal.scale(vnNew).add(tangent.scale(vtNew));
-
-  ball.omega.z *= 0.3;
+  ball.omega.z += deltaOmegaZ;
 
   // Rolling snap: set omega to match new velocity (pure rolling)
   ball.omega.x = -ball.vel.y / R;
