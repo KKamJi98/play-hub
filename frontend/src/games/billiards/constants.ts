@@ -21,8 +21,8 @@ export const g = 9.81;
 /** Ball-cloth sliding friction coefficient */
 export const MU_S = 0.2;
 
-/** Ball-cloth rolling resistance coefficient */
-export const MU_R = 0.015;
+/** Ball-cloth rolling resistance coefficient (increased for realistic deceleration) */
+export const MU_R = 0.025;
 
 /** Ball-cloth spinning friction coefficient */
 export const MU_SP = 0.044;
@@ -31,13 +31,13 @@ export const MU_SP = 0.044;
 export const MU_BB = 0.06;
 
 /** Ball-ball coefficient of restitution */
-export const E_BB = 0.95;
+export const E_BB = 0.92;
 
 /** Ball-cushion friction coefficient */
 export const MU_C = 0.14;
 
-/** Ball-cushion coefficient of restitution */
-export const E_C = 0.85;
+/** Ball-cushion coefficient of restitution (realistic: cushions absorb ~30% energy) */
+export const E_C = 0.7;
 
 // ---- Coordinate conversion ------------------------------------------------
 
@@ -74,10 +74,10 @@ export const SLIP_THRESHOLD = 0.02;
 // ---- Shot power mapping ---------------------------------------------------
 
 /** Minimum shot velocity (m/s) at 0% power */
-export const MIN_SHOT_VELOCITY = 0.5;
+export const MIN_SHOT_VELOCITY = 0.3;
 
-/** Maximum shot velocity (m/s) at 100% power */
-export const MAX_SHOT_VELOCITY = 8.0;
+/** Maximum shot velocity (m/s) at 100% power — realistic hard carom shot */
+export const MAX_SHOT_VELOCITY = 4.5;
 
 /** Maximum omega magnitude from spin selector (rad/s) */
 export const MAX_SPIN_OMEGA = 30;

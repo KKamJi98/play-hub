@@ -62,9 +62,14 @@ export function resolveBallBall(a: Ball, b: Ball): boolean {
   a.omega.z += deltaOmegaZ;
   b.omega.z += deltaOmegaZ;
 
-  // Both balls enter sliding phase after collision
-  a.phase = "sliding";
-  b.phase = "sliding";
+  // Rolling snap: set omega to match new velocity (pure rolling)
+  a.omega.x = -a.vel.y / R;
+  a.omega.y = a.vel.x / R;
+  b.omega.x = -b.vel.y / R;
+  b.omega.y = b.vel.x / R;
+
+  a.phase = "rolling";
+  b.phase = "rolling";
 
   return true;
 }
@@ -139,8 +144,12 @@ function applyCushionBounce(ball: Ball, inwardNormal: Vec2, _rMeters: number): v
   const vtNew = vt + Jt / M;
 
   ball.vel = inwardNormal.scale(vnNew).add(tangent.scale(vtNew));
-  ball.omega.z += (-5 * Jt) / (2 * M * R);
 
-  // Re-enter sliding phase after cushion hit
-  ball.phase = "sliding";
+  ball.omega.z *= 0.3;
+
+  // Rolling snap: set omega to match new velocity (pure rolling)
+  ball.omega.x = -ball.vel.y / R;
+  ball.omega.y = ball.vel.x / R;
+
+  ball.phase = "rolling";
 }

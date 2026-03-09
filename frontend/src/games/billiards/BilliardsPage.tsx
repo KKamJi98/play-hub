@@ -5,7 +5,6 @@ import BilliardsCanvas from "./BilliardsCanvas";
 import SpinSelector from "./SpinSelector";
 import { TARGET_SCORE_OPTIONS, BALL_COLORS } from "./constants";
 import type { BallId } from "./constants";
-import { useTheme } from "../../hooks/useTheme";
 import { useOnlineGame } from "../../hooks/useOnlineGame";
 import OnlineLobby from "../../components/online/OnlineLobby";
 import GameViewport from "../../components/game/GameViewport";
@@ -42,9 +41,6 @@ function ModeSelection({
   onSelectTargetScore: (s: number) => void;
   onStart: () => void;
 }) {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-
   return (
     <div className="flex flex-col items-center gap-8 py-8 px-4">
       <h1 className="font-display text-4xl font-bold tracking-wider">
@@ -68,12 +64,8 @@ function ModeSelection({
               className={`touch-manipulation relative flex flex-col items-center gap-2 rounded-xl border p-6 transition-all duration-200
                 ${
                   isSelected
-                    ? isDark
-                      ? "border-[#00f0ff]/50 bg-[#00f0ff]/10 shadow-lg shadow-cyan-500/10"
-                      : "border-blue-400/50 bg-blue-50 shadow-lg shadow-blue-500/10"
-                    : isDark
-                      ? "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10"
-                      : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                    ? "border-[#00f0ff]/50 bg-[#00f0ff]/10 shadow-lg shadow-cyan-500/10"
+                    : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10"
                 }`}
             >
               <span
@@ -100,12 +92,8 @@ function ModeSelection({
               className={`touch-manipulation px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border
                 ${
                   targetScore === score
-                    ? isDark
-                      ? "bg-[#00f0ff]/20 text-[#00f0ff] border-[#00f0ff]/40"
-                      : "bg-blue-100 text-blue-700 border-blue-300"
-                    : isDark
-                      ? "bg-white/5 text-[#8892a4] border-white/10 hover:bg-white/10"
-                      : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                    ? "bg-[#00f0ff]/20 text-[#00f0ff] border-[#00f0ff]/40"
+                    : "bg-white/5 text-[#8892a4] border-white/10 hover:bg-white/10"
                 }`}
             >
               {score}점
@@ -138,9 +126,6 @@ function ScoreBoard({
   targetScore: number;
   currentPlayer: 0 | 1;
 }) {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-
   const players: { label: string; color: string; idx: 0 | 1 }[] = [
     { label: "P1 (흰공)", color: BALL_COLORS.white, idx: 0 },
     { label: "P2 (노란공)", color: BALL_COLORS.yellow, idx: 1 },
@@ -154,12 +139,8 @@ function ScoreBoard({
           className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all duration-300
             ${
               currentPlayer === idx
-                ? isDark
-                  ? "border-[#00f0ff]/50 bg-[#00f0ff]/10"
-                  : "border-blue-400/50 bg-blue-50"
-                : isDark
-                  ? "border-white/10 bg-white/5"
-                  : "border-gray-200 bg-gray-50"
+                ? "border-[#00f0ff]/50 bg-[#00f0ff]/10"
+                : "border-white/10 bg-white/5"
             }`}
         >
           <div
@@ -189,18 +170,10 @@ function ShotResultOverlay({
   cueBallHits: BallId[];
   onContinue: () => void;
 }) {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div
-        className={`flex flex-col items-center gap-4 rounded-2xl border p-6 max-w-xs w-full mx-4
-          ${
-            isDark
-              ? "bg-[#111827] border-white/10"
-              : "bg-white border-gray-200 shadow-xl"
-          }`}
+        className="flex flex-col items-center gap-4 rounded-2xl border p-6 max-w-xs w-full mx-4 bg-[#111827] border-white/10"
       >
         <h3 className="font-display text-xl font-bold tracking-wider">
           {scored ? "득점!" : "실패"}
@@ -236,9 +209,6 @@ function GameOverModal({
   scores: [number, number];
   onReset: () => void;
 }) {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-
   const winnerColor =
     winner === 0 ? BALL_COLORS.white : BALL_COLORS.yellow;
   const winnerLabel = winner === 0 ? "Player 1 (흰공)" : "Player 2 (노란공)";
@@ -246,12 +216,7 @@ function GameOverModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div
-        className={`flex flex-col items-center gap-6 rounded-2xl border p-8 max-w-sm w-full mx-4
-          ${
-            isDark
-              ? "bg-[#111827] border-white/10"
-              : "bg-white border-gray-200 shadow-xl"
-          }`}
+        className="flex flex-col items-center gap-6 rounded-2xl border p-8 max-w-sm w-full mx-4 bg-[#111827] border-white/10"
       >
         <div
           className="w-16 h-16 rounded-full"
@@ -292,10 +257,8 @@ function PowerSlider({
   value: number;
   onChange: (v: number) => void;
 }) {
-  const { theme } = useTheme();
   const { displayScale } = useDisplaySettings();
   const isCoarsePointer = useCoarsePointer();
-  const isDark = theme === "dark";
   const trackRef = useRef<HTMLDivElement>(null);
   const activePointerIdRef = useRef<number | null>(null);
 
@@ -358,8 +321,8 @@ function PowerSlider({
         style={{
           width: TRACK_W,
           height: TRACK_H,
-          background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-          borderColor: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)",
+          background: "rgba(255,255,255,0.05)",
+          borderColor: "rgba(255,255,255,0.15)",
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -417,9 +380,7 @@ export default function BilliardsPage() {
   } = useBilliardsGame();
 
   const online = useOnlineGame("billiards", { onGameStarted: startGame });
-  const { theme } = useTheme();
   const isCoarsePointer = useCoarsePointer();
-  const isDark = theme === "dark";
 
   const cueBallId: BallId =
     state.currentPlayer === 0 ? "white" : "yellow";
@@ -534,18 +495,14 @@ export default function BilliardsPage() {
 
   if (state.mode === "online" && state.phase === "setup") {
     return (
-      <GameViewport title="4구 당구" maxWidth={1200}>
+      <GameViewport title="4구 당구" forceDark>
         <div className="flex flex-1 items-center justify-center py-6 sm:py-8">
           <div className="flex flex-col items-center gap-4">
             {online.state.phase !== "playing" ? (
               <>
                 <button
                   onClick={() => { setMode("local"); }}
-                  className={`touch-manipulation self-start px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
-                    isDark
-                      ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
-                      : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
-                  }`}
+                  className="touch-manipulation self-start px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
                 >
                   뒤로
                 </button>
@@ -578,7 +535,7 @@ export default function BilliardsPage() {
 
   if (state.phase === "setup") {
     return (
-      <GameViewport title="4구 당구" maxWidth={1200}>
+      <GameViewport title="4구 당구" forceDark>
         <div className="flex flex-1 items-center justify-center py-6 sm:py-8">
           <ModeSelection
             selectedMode={state.mode}
@@ -593,23 +550,15 @@ export default function BilliardsPage() {
   }
 
   return (
-    <GameViewport title="4구 당구" maxWidth={1560}>
-      <div className="flex flex-1 flex-col gap-6 pt-12 sm:pt-14">
+    <GameViewport title="4구 당구" forceDark>
+      <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-2 pt-1">
         <div
-          className={`rounded-[28px] border px-4 py-4 backdrop-blur-md sm:px-6 ${
-            isDark
-              ? "border-white/10 bg-white/5"
-              : "border-gray-200 bg-white/92"
-          }`}
+          className="shrink-0 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-md sm:px-4"
         >
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <button
               onClick={handleReset}
-              className={`touch-manipulation rounded-lg border px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                isDark
-                  ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
-                  : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"
-              }`}
+              className="touch-manipulation rounded-lg border px-4 py-2 text-sm font-medium transition-all duration-200 border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]"
             >
               나가기
             </button>
@@ -632,13 +581,9 @@ export default function BilliardsPage() {
           </div>
         </div>
 
-        <div className="grid flex-1 min-h-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
+        <div className="grid w-full flex-1 min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] xl:grid-rows-[minmax(0,1fr)]">
           <div
-            className={`flex min-h-[360px] items-center justify-center rounded-[32px] border p-3 backdrop-blur-md sm:p-4 ${
-              isDark
-                ? "border-white/10 bg-white/5"
-                : "border-gray-200 bg-white/92"
-            }`}
+            className="flex h-full min-h-[360px] items-center justify-center rounded-[32px] border border-white/10 bg-white/5 p-3 backdrop-blur-md sm:p-4 xl:min-h-0"
           >
             <BilliardsCanvas
               balls={state.balls}
@@ -646,19 +591,16 @@ export default function BilliardsPage() {
               phase={state.phase}
               aimPower={state.aimPower}
               aimDirection={state.aimDirection}
+              aimSpin={state.aimSpin}
               onAimChange={setAimDirection}
               onPhysicsFrame={onPhysicsFrame}
               disabled={!isMyTurn}
             />
           </div>
 
-          <aside className="flex flex-col gap-4">
+          <aside className="flex h-full min-h-0 flex-col gap-4">
             <div
-              className={`rounded-[32px] border p-6 backdrop-blur-md ${
-                isDark
-                  ? "border-white/10 bg-white/5"
-                  : "border-gray-200 bg-white/92"
-              }`}
+              className="rounded-[32px] border p-6 backdrop-blur-md border-white/10 bg-white/5"
             >
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8892a4]">
                 Turn
@@ -688,11 +630,7 @@ export default function BilliardsPage() {
             </div>
 
             <div
-              className={`rounded-[32px] border p-6 backdrop-blur-md ${
-                isDark
-                  ? "border-white/10 bg-white/5"
-                  : "border-gray-200 bg-white/92"
-              }`}
+              className="rounded-[32px] border p-6 backdrop-blur-md border-white/10 bg-white/5"
             >
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8892a4]">
                 Shot Controls
@@ -715,9 +653,7 @@ export default function BilliardsPage() {
                     className={`touch-manipulation mt-5 w-full rounded-2xl px-6 py-4 font-display text-base font-semibold tracking-wider transition-all duration-200 active:scale-95 ${
                       state.aimDirection
                         ? "bg-gradient-to-r from-[#00f0ff] to-[#0080ff] text-[#0a0e1a] shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/50 hover:scale-[1.02]"
-                        : isDark
-                          ? "bg-white/5 text-white/30 border border-white/10 cursor-not-allowed"
-                          : "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                        : "bg-white/5 text-white/30 border border-white/10 cursor-not-allowed"
                     }`}
                   >
                     발사
@@ -735,11 +671,7 @@ export default function BilliardsPage() {
             </div>
 
             <div
-              className={`rounded-[32px] border p-6 backdrop-blur-md ${
-                isDark
-                  ? "border-white/10 bg-white/5"
-                  : "border-gray-200 bg-white/92"
-              }`}
+              className="flex min-h-0 flex-1 flex-col rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur-md"
             >
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8892a4]">
                 Mobile Tips
@@ -774,12 +706,7 @@ export default function BilliardsPage() {
         {online.state.opponentLeft === true && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div
-              className={`flex flex-col items-center gap-6 rounded-2xl border p-8 max-w-sm w-full mx-4
-                ${
-                  isDark
-                    ? "bg-[#111827] border-white/10"
-                    : "bg-white border-gray-200 shadow-xl"
-                }`}
+              className="flex flex-col items-center gap-6 rounded-2xl border p-8 max-w-sm w-full mx-4 bg-[#111827] border-white/10"
             >
               <div className="text-center">
                 <h2 className="font-display text-2xl font-bold tracking-wider">상대가 나갔습니다</h2>

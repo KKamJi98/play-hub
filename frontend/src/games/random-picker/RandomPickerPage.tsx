@@ -12,7 +12,7 @@ export default function RandomPickerPage() {
 
   if (state.phase === "setup") {
     return (
-      <GameViewport title="랜덤 뽑기" maxWidth={1120}>
+      <GameViewport title="랜덤 뽑기">
         <div className="flex flex-1 items-center justify-center py-6 sm:py-8">
           <PickerSetup
             items={state.items}
@@ -25,16 +25,16 @@ export default function RandomPickerPage() {
   }
 
   return (
-    <GameViewport title="랜덤 뽑기" maxWidth={1240}>
-      <div className="flex flex-1 flex-col gap-6 pt-10 sm:pt-12">
+    <GameViewport title="랜덤 뽑기">
+      <div className="flex flex-1 flex-col gap-2 pt-1">
         <div
-          className={`rounded-[28px] border px-4 py-4 backdrop-blur-md sm:px-6 ${
+          className={`rounded-2xl border px-3 py-2 backdrop-blur-md sm:px-4 ${
             isDark
               ? "border-white/10 bg-white/5"
               : "border-gray-200 bg-white/90"
           }`}
         >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <button
               onClick={goBack}
               disabled={state.spinning}
@@ -66,7 +66,7 @@ export default function RandomPickerPage() {
           </div>
         </div>
 
-        <div className="grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:items-center">
+        <div className="grid flex-1 min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] xl:items-center">
           <div
             className={`flex min-h-[320px] items-center justify-center rounded-[32px] border p-5 backdrop-blur-md sm:p-8 ${
               isDark

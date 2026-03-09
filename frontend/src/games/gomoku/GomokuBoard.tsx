@@ -35,7 +35,7 @@ export default function GomokuBoard({
 
   const isInteractive = gameStatus === "playing" && !aiThinking;
   const isDark = theme === "dark";
-  const boardMaxSize = Math.round(920 * Math.min(displayScale, 1.15));
+  const boardMaxSize = Math.round(1200 * Math.min(displayScale, 1.15));
 
   // Board dimensions: CSS Grid based on intersection count
   const cellCount = BOARD_SIZE - 1;
@@ -58,11 +58,11 @@ export default function GomokuBoard({
   };
 
   return (
-    <div className="flex items-center justify-center p-2 sm:p-4">
+    <div className="flex w-full items-center justify-center p-2 sm:p-4">
       <div
         className="touch-manipulation relative select-none"
         style={{
-          width: `min(100%, 92vw, 88dvh, ${boardMaxSize}px)`,
+          width: `min(100%, 95vw, 95dvh, ${boardMaxSize}px)`,
           aspectRatio: "1 / 1",
         }}
       >

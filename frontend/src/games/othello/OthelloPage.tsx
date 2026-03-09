@@ -297,7 +297,7 @@ export default function OthelloPage() {
   // Online mode: show lobby before game starts
   if (state.mode === "online" && state.gameStatus === "waiting") {
     return (
-      <GameViewport title="오델로" maxWidth={1180}>
+      <GameViewport title="오델로">
         <div className="flex flex-1 items-center justify-center py-6 sm:py-8">
           <div className="flex flex-col items-center gap-4">
             {online.state.phase !== "playing" ? (
@@ -341,7 +341,7 @@ export default function OthelloPage() {
 
   if (state.gameStatus === "waiting") {
     return (
-      <GameViewport title="오델로" maxWidth={1180}>
+      <GameViewport title="오델로">
         <div className="flex flex-1 items-center justify-center py-6 sm:py-8">
           <ModeSelection
             selectedMode={state.mode}
@@ -406,10 +406,10 @@ export default function OthelloPage() {
     : state.winner;
 
   return (
-    <GameViewport title="오델로" maxWidth={1440}>
-      <div className="flex flex-1 flex-col gap-6 pt-12 sm:pt-14">
+    <GameViewport title="오델로">
+      <div className="flex flex-1 flex-col gap-2 pt-1">
         <div
-          className={`rounded-[28px] border px-4 py-4 backdrop-blur-md sm:px-6 ${
+          className={`rounded-2xl border px-3 py-2 backdrop-blur-md sm:px-4 ${
             isDark
               ? "border-white/10 bg-white/5"
               : "border-gray-200 bg-white/92"
@@ -441,9 +441,9 @@ export default function OthelloPage() {
           </div>
         </div>
 
-        <div className="grid flex-1 min-h-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
+        <div className="grid flex-1 min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
           <div
-            className={`flex min-h-[360px] items-center justify-center rounded-[32px] border p-2 backdrop-blur-md sm:p-4 ${
+            className={`flex min-h-[360px] items-center justify-center rounded-[32px] border p-1 backdrop-blur-md sm:p-2 ${
               isDark
                 ? "border-white/10 bg-white/5"
                 : "border-gray-200 bg-white/92"

@@ -76,7 +76,7 @@ export default function LadderPage() {
 
   if (state.phase === "setup") {
     return (
-      <GameViewport title="사다리 게임" maxWidth={1180}>
+      <GameViewport title="사다리 게임">
         <div className="flex flex-1 items-center justify-center py-6 sm:py-8">
           <LadderSetup
             players={state.players}
@@ -91,16 +91,16 @@ export default function LadderPage() {
   }
 
   return (
-    <GameViewport title="사다리 게임" maxWidth={1360}>
-      <div className="flex flex-1 flex-col gap-6 pt-12 sm:pt-14">
+    <GameViewport title="사다리 게임">
+      <div className="flex flex-1 flex-col gap-2 pt-1">
         <div
-          className={`rounded-[28px] border px-4 py-4 backdrop-blur-md sm:px-6 ${
+          className={`rounded-2xl border px-3 py-2 backdrop-blur-md sm:px-4 ${
             isDark
               ? "border-white/10 bg-white/5"
               : "border-gray-200 bg-white/92"
           }`}
         >
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <button
               onClick={reset}
               className={`touch-manipulation rounded-lg border px-4 py-2 text-sm font-medium transition-all duration-200 ${
@@ -129,7 +129,7 @@ export default function LadderPage() {
           </div>
         </div>
 
-        <div className="grid flex-1 min-h-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
+        <div className="grid flex-1 min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
           <div
             className={`rounded-[32px] border p-4 backdrop-blur-md sm:p-6 ${
               isDark

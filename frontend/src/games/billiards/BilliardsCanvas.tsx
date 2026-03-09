@@ -6,6 +6,12 @@ import {
   TABLE_WIDTH,
   TABLE_HEIGHT,
   CUSHION_WIDTH,
+  E_C,
+  E_BB,
+  MU_BB,
+  R,
+  M,
+  MAX_SPIN_OMEGA,
 } from "./constants";
 import type { BallId } from "./constants";
 import { useDisplaySettings } from "../../hooks/useDisplaySettings";
@@ -19,6 +25,7 @@ interface Props {
   phase: "aiming" | "rolling" | "scoring" | "gameOver" | "setup";
   aimPower: number; // 0-100
   aimDirection: Vec2 | null;
+  aimSpin: Vec2; // x = sidespin [-1,1], y = follow/draw [-1,1]
   onAimChange: (dir: Vec2 | null) => void;
   onPhysicsFrame: (
     balls: Ball[],
@@ -147,6 +154,7 @@ export default function BilliardsCanvas({
   phase,
   aimPower,
   aimDirection,
+  aimSpin,
   onAimChange,
   onPhysicsFrame,
   disabled = false,
@@ -167,6 +175,7 @@ export default function BilliardsCanvas({
   const cueBallIdRef = useRef<BallId>(cueBallId);
   const aimPowerRef = useRef(aimPower);
   const aimDirectionRef = useRef<Vec2 | null>(aimDirection);
+  const aimSpinRef = useRef<Vec2>(aimSpin);
   const onPhysicsFrameRef = useRef(onPhysicsFrame);
 
   // Scale factor: canvas pixels → internal units
@@ -196,6 +205,10 @@ export default function BilliardsCanvas({
   }, [aimDirection]);
 
   useEffect(() => {
+    aimSpinRef.current = aimSpin;
+  }, [aimSpin]);
+
+  useEffect(() => {
     onPhysicsFrameRef.current = onPhysicsFrame;
   }, [onPhysicsFrame]);
 
@@ -209,9 +222,8 @@ export default function BilliardsCanvas({
       const rect = container.getBoundingClientRect();
       const aspectRatio = TOTAL_W / TOTAL_H;
       const maxW = rect.width;
-      const maxCanvasWidth = Math.round(1240 * Math.min(displayScale, 1.15));
-      const mobileHeightRatio = window.innerWidth < 768 ? 0.5 : 0.72;
-      const maxHeight = Math.max(280, window.innerHeight * mobileHeightRatio);
+      const maxCanvasWidth = Math.round(1240 * Math.min(Math.max(displayScale, 0.9), 1.15));
+      const maxHeight = Math.max(280, rect.height > 100 ? rect.height : window.innerHeight * 0.72);
       const widthFromHeight = maxHeight * aspectRatio;
       const w = Math.max(280, Math.min(maxW, maxCanvasWidth, widthFromHeight));
       const h = w / aspectRatio;
@@ -417,7 +429,9 @@ export default function BilliardsCanvas({
       if (phase === "aiming" && aimDirection) {
         const cue = currentBalls.find((b) => b.id === cueBallId);
         if (cue) {
-          drawAimGuide(ctx, cue, aimDirection, currentBalls, cueBallId);
+          const spin = aimSpinRef.current;
+          drawAimGuide(ctx, cue, aimDirection, currentBalls, cueBallId, spin, aimPower);
+          drawSpinIndicator(ctx, cue, spin);
           drawCueStick(ctx, cue, aimDirection, aimPower);
         }
       }
@@ -430,7 +444,7 @@ export default function BilliardsCanvas({
   }, [canvasSize]);
 
   return (
-    <div ref={containerRef} className="w-full">
+    <div ref={containerRef} className="flex h-full w-full items-center justify-center">
       <canvas
         ref={canvasRef}
         style={{
@@ -486,8 +500,75 @@ function drawBall(ctx: CanvasRenderingContext2D, ball: Ball) {
   ctx.fill();
 }
 
+// ---- Physics-based guide helpers -------------------------------------------
+
+/**
+ * Compute cushion reflection with restitution and sidespin english effect.
+ * Returns the reflected direction vector (not normalized).
+ */
+function guideCushionReflect(
+  dir: Vec2,
+  _speed: number,
+  normal: Vec2,
+  omegaZ: number,
+): Vec2 {
+  const tangent = normal.perp();
+  const vn = dir.dot(normal);
+  const vt = dir.dot(tangent);
+
+  // Restitution on normal component
+  const vnNew = -E_C * vn;
+  // Sidespin english shifts tangential velocity
+  const englishShift = (2 / 7) * R * omegaZ;
+  const vtNew = (5 / 7) * vt + englishShift;
+
+  return normal.scale(vnNew).add(tangent.scale(vtNew));
+}
+
+/**
+ * Compute ball-ball deflection directions using impulse-based physics.
+ * Returns { targetDir, cueDir } as normalized direction vectors.
+ */
+function guideBallBallDeflection(
+  cueDir: Vec2,
+  _speed: number,
+  contactNormal: Vec2,
+): { targetDir: Vec2; cueDir: Vec2 } {
+  // Incoming cue velocity along normal and tangent
+  const velAlongNormal = cueDir.dot(contactNormal);
+  const tangent = contactNormal.perp();
+  const velAlongTangent = cueDir.dot(tangent);
+
+  // Normal impulse (equal masses): each ball gets half the impulse transfer
+  const Jn = -(1 + E_BB) * velAlongNormal * (M / 2);
+  // Tangential friction impulse
+  const relTangentVel = velAlongTangent;
+  const desiredJt = -(M / 7) * relTangentVel;
+  const maxJt = MU_BB * Math.abs(Jn);
+  const Jt = Math.max(-maxJt, Math.min(maxJt, desiredJt));
+
+  // Cue ball post-collision velocity
+  const cueVelAfter = cueDir
+    .add(contactNormal.scale(Jn / M))
+    .add(tangent.scale(Jt / M));
+
+  // Target ball post-collision velocity
+  const targetVelAfter = contactNormal
+    .scale(-Jn / M)
+    .add(tangent.scale(-Jt / M));
+
+  const cLen = cueVelAfter.length();
+  const tLen = targetVelAfter.length();
+
+  return {
+    targetDir: tLen > 0.001 ? targetVelAfter.scale(1 / tLen) : contactNormal,
+    cueDir: cLen > 0.001 ? cueVelAfter.scale(1 / cLen) : Vec2.zero(),
+  };
+}
+
 /**
  * Ghost ball aiming guide with ray-cast collision detection.
+ * Uses physics-based deflection and cushion reflection.
  */
 function drawAimGuide(
   ctx: CanvasRenderingContext2D,
@@ -495,9 +576,16 @@ function drawAimGuide(
   direction: Vec2,
   allBalls: Ball[],
   cueBallId: BallId,
+  aimSpin: Vec2,
+  aimPower: number,
 ) {
   const origin = cue.pos;
   const dir = direction.normalize();
+
+  // Compute omegaZ from sidespin for english effect
+  const omegaZ = aimSpin.x * MAX_SPIN_OMEGA;
+  // Normalized speed for guide calculations (0-1 range)
+  const speed = aimPower / 100;
 
   // Find closest intersection: balls or cushion
   let closestBallDist = Infinity;
@@ -505,7 +593,6 @@ function drawAimGuide(
 
   for (const ball of allBalls) {
     if (ball.id === cueBallId) continue;
-    // Ray-circle with effective radius = 2 * ball radius (ghost ball method)
     const t = rayCircleIntersect(origin, dir, ball.pos, cue.radius + ball.radius);
     if (t !== null && t < closestBallDist) {
       closestBallDist = t;
@@ -525,7 +612,7 @@ function drawAimGuide(
     // --- Hitting a ball first ---
     const ghostPos = origin.add(dir.scale(closestBallDist));
 
-    // Primary aim line: cue ball center → ghost ball position
+    // Primary aim line
     ctx.strokeStyle = "rgba(255,255,255,0.7)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -543,7 +630,10 @@ function drawAimGuide(
     // Contact normal: from ghost ball center → target ball center
     const contactNormal = hitBall.pos.sub(ghostPos).normalize();
 
-    // Target ball deflection line (along contact normal)
+    // Physics-based deflection
+    const defl = guideBallBallDeflection(dir, speed, contactNormal);
+
+    // Target ball deflection line
     const targetDeflLen = 120;
     ctx.strokeStyle = "rgba(255,255,255,0.35)";
     ctx.lineWidth = 1.5;
@@ -551,23 +641,21 @@ function drawAimGuide(
     ctx.beginPath();
     ctx.moveTo(cx + hitBall.pos.x, cy + hitBall.pos.y);
     ctx.lineTo(
-      cx + hitBall.pos.x + contactNormal.x * targetDeflLen,
-      cy + hitBall.pos.y + contactNormal.y * targetDeflLen,
+      cx + hitBall.pos.x + defl.targetDir.x * targetDeflLen,
+      cy + hitBall.pos.y + defl.targetDir.y * targetDeflLen,
     );
     ctx.stroke();
 
-    // Cue ball deflection after collision (perpendicular to contact normal, simplified)
-    const cueDirAfter = dir.sub(contactNormal.scale(dir.dot(contactNormal)));
-    const cueDeflLen = cueDirAfter.length() > 0.01 ? 80 : 0;
+    // Cue ball deflection after collision
+    const cueDeflLen = defl.cueDir.length() > 0.01 ? 80 : 0;
     if (cueDeflLen > 0) {
-      const cueDeflDir = cueDirAfter.normalize();
       ctx.strokeStyle = "rgba(255,255,255,0.2)";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(cx + ghostPos.x, cy + ghostPos.y);
       ctx.lineTo(
-        cx + ghostPos.x + cueDeflDir.x * cueDeflLen,
-        cy + ghostPos.y + cueDeflDir.y * cueDeflLen,
+        cx + ghostPos.x + defl.cueDir.x * cueDeflLen,
+        cy + ghostPos.y + defl.cueDir.y * cueDeflLen,
       );
       ctx.stroke();
     }
@@ -576,7 +664,7 @@ function drawAimGuide(
     // --- Hitting a cushion first ---
     const hitPoint = cushionHit.point;
 
-    // Primary aim line: cue ball → cushion hit
+    // Primary aim line
     ctx.strokeStyle = "rgba(255,255,255,0.7)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -584,8 +672,9 @@ function drawAimGuide(
     ctx.lineTo(cx + hitPoint.x, cy + hitPoint.y);
     ctx.stroke();
 
-    // Reflection direction (angle of incidence = angle of reflection)
-    const reflected = dir.reflect(cushionHit.normal);
+    // Physics-based cushion reflection with english
+    const reflected = guideCushionReflect(dir, speed, cushionHit.normal, omegaZ);
+    const reflectedNorm = reflected.length() > 0.001 ? reflected.scale(1 / reflected.length()) : dir.reflect(cushionHit.normal);
     const reflectLen = 100;
     ctx.strokeStyle = "rgba(255,255,255,0.3)";
     ctx.lineWidth = 1.5;
@@ -593,8 +682,8 @@ function drawAimGuide(
     ctx.beginPath();
     ctx.moveTo(cx + hitPoint.x, cy + hitPoint.y);
     ctx.lineTo(
-      cx + hitPoint.x + reflected.x * reflectLen,
-      cy + hitPoint.y + reflected.y * reflectLen,
+      cx + hitPoint.x + reflectedNorm.x * reflectLen,
+      cy + hitPoint.y + reflectedNorm.y * reflectLen,
     );
     ctx.stroke();
     ctx.setLineDash([]);
@@ -609,6 +698,112 @@ function drawAimGuide(
     ctx.lineTo(cx + origin.x + dir.x * lineLen, cy + origin.y + dir.y * lineLen);
     ctx.stroke();
     ctx.setLineDash([]);
+  }
+
+  // Draw follow/draw chevrons on the aim line
+  if (Math.abs(aimSpin.y) > 0.05) {
+    drawFollowDrawChevrons(ctx, origin, dir, aimSpin.y, closestBallDist < cushionDist ? closestBallDist : (cushionHit ? cushionDist : 300));
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Draw chevron arrows along the aim line to indicate follow (forward) or draw (backward) spin.
+ */
+function drawFollowDrawChevrons(
+  ctx: CanvasRenderingContext2D,
+  origin: Vec2,
+  dir: Vec2,
+  spinY: number,
+  maxDist: number,
+) {
+  const cx = CUSHION_WIDTH;
+  const cy = CUSHION_WIDTH;
+  const isFollow = spinY > 0;
+  const intensity = Math.abs(spinY);
+  const chevronCount = Math.ceil(intensity * 3); // 1-3 chevrons
+  const spacing = Math.min(40, maxDist / (chevronCount + 2));
+  const startOffset = 30;
+
+  ctx.strokeStyle = isFollow ? "rgba(0,240,255,0.5)" : "rgba(255,100,60,0.5)";
+  ctx.lineWidth = 1.5;
+
+  // Perpendicular to aim direction
+  const perp = dir.perp();
+  const chevronSize = 6;
+
+  for (let i = 0; i < chevronCount; i++) {
+    const dist = startOffset + i * spacing;
+    if (dist >= maxDist - 10) break;
+
+    const center = origin.add(dir.scale(dist));
+    const tip = isFollow
+      ? center.add(dir.scale(chevronSize))
+      : center.sub(dir.scale(chevronSize));
+    const left = center.sub(perp.scale(chevronSize));
+    const right = center.add(perp.scale(chevronSize));
+
+    ctx.beginPath();
+    ctx.moveTo(cx + left.x, cy + left.y);
+    ctx.lineTo(cx + tip.x, cy + tip.y);
+    ctx.lineTo(cx + right.x, cy + right.y);
+    ctx.stroke();
+  }
+}
+
+/**
+ * Draw spin indicator around the cue ball:
+ * - Sidespin (spin.x): arc arrow around the ball
+ */
+function drawSpinIndicator(
+  ctx: CanvasRenderingContext2D,
+  cue: Ball,
+  spin: Vec2,
+) {
+  const cx = CUSHION_WIDTH + cue.pos.x;
+  const cy = CUSHION_WIDTH + cue.pos.y;
+  const indicatorRadius = cue.radius + 6;
+
+  ctx.save();
+
+  // Sidespin arc arrow
+  if (Math.abs(spin.x) > 0.05) {
+    const intensity = Math.abs(spin.x);
+    const arcLen = intensity * Math.PI * 0.8; // up to ~144 degrees
+    const startAngle = -Math.PI / 2 - arcLen / 2;
+    const endAngle = -Math.PI / 2 + arcLen / 2;
+    const clockwise = spin.x > 0; // positive = right english
+
+    ctx.strokeStyle = `rgba(0,240,255,${0.3 + intensity * 0.3})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    if (clockwise) {
+      ctx.arc(cx, cy, indicatorRadius, startAngle, endAngle, false);
+    } else {
+      ctx.arc(cx, cy, indicatorRadius, endAngle, startAngle, true);
+    }
+    ctx.stroke();
+
+    // Arrowhead at the end of the arc
+    const arrowAngle = clockwise ? endAngle : startAngle;
+    const arrowX = cx + Math.cos(arrowAngle) * indicatorRadius;
+    const arrowY = cy + Math.sin(arrowAngle) * indicatorRadius;
+    const tangentAngle = arrowAngle + (clockwise ? Math.PI / 2 : -Math.PI / 2);
+    const arrowSize = 5;
+
+    ctx.beginPath();
+    ctx.moveTo(arrowX, arrowY);
+    ctx.lineTo(
+      arrowX + Math.cos(tangentAngle + 0.5) * arrowSize,
+      arrowY + Math.sin(tangentAngle + 0.5) * arrowSize,
+    );
+    ctx.moveTo(arrowX, arrowY);
+    ctx.lineTo(
+      arrowX + Math.cos(tangentAngle - 0.5) * arrowSize,
+      arrowY + Math.sin(tangentAngle - 0.5) * arrowSize,
+    );
+    ctx.stroke();
   }
 
   ctx.restore();

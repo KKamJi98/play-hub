@@ -18,20 +18,33 @@
 }
 
 /* ===== Base Styles ===== */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* Tailwind v4 preflight handles margin/padding/box-sizing resets.
+   Custom resets in @layer base to avoid overriding Tailwind utilities. */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
 }
 
 html {
   scroll-behavior: smooth;
+  overflow: hidden;
+  height: 100%;
 }
 
 body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  height: 100%;
+}
+
+#root {
+  height: 100%;
+  overflow: hidden;
 }
 
 button,
@@ -146,6 +159,12 @@ select {
     #e2e8f0 75%,
     #f0f2f5 100%
   );
+  background-size: 400% 400%;
+  animation: gradient-shift 15s ease infinite;
+}
+
+[data-theme="dark"] .gradient-mesh {
+  background: linear-gradient(135deg, #0a0e1a 0%, #0f172a 25%, #1a1040 50%, #0f172a 75%, #0a0e1a 100%);
   background-size: 400% 400%;
   animation: gradient-shift 15s ease infinite;
 }
