@@ -46,3 +46,6 @@ coverage/
 
 # Agent-generated reports
 argocd/.init-agent-md/
+
+# Git worktrees
+.worktrees/
