@@ -372,7 +372,7 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="gradient-mesh relative min-h-[calc(100dvh-4rem)] overflow-hidden">
+    <div className="gradient-mesh relative min-h-[calc(100dvh-4rem)]">
       {/* Floating particles */}
       <div className="pointer-events-none absolute inset-0" aria-hidden="true">
         <div

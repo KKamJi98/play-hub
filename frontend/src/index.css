@@ -30,7 +30,6 @@
 
 html {
   scroll-behavior: smooth;
-  overflow: hidden;
   height: 100%;
 }
 
@@ -38,13 +37,11 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow: hidden;
   height: 100%;
 }
 
 #root {
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
 }
 
 button,
@@ -58,12 +55,6 @@ select {
 [data-theme="dark"] {
   background-color: var(--color-base);
   color: var(--color-text-primary);
-}
-
-/* ===== Light Theme ===== */
-[data-theme="light"] {
-  background-color: var(--color-base-light);
-  color: var(--color-text-primary-light);
 }
 
 /* ===== Animated Background ===== */
@@ -150,19 +141,6 @@ select {
   user-select: none;
 }
 
-[data-theme="light"] .gradient-mesh {
-  background: linear-gradient(
-    135deg,
-    #f0f2f5 0%,
-    #e2e8f0 25%,
-    #ddd6fe 50%,
-    #e2e8f0 75%,
-    #f0f2f5 100%
-  );
-  background-size: 400% 400%;
-  animation: gradient-shift 15s ease infinite;
-}
-
 [data-theme="dark"] .gradient-mesh {
   background: linear-gradient(135deg, #0a0e1a 0%, #0f172a 25%, #1a1040 50%, #0f172a 75%, #0a0e1a 100%);
   background-size: 400% 400%;
@@ -175,11 +153,6 @@ select {
 
 .card-glow:hover {
   box-shadow: 0 0 20px rgba(0, 240, 255, 0.3), 0 0 40px rgba(0, 240, 255, 0.1);
-  transform: translateY(-4px);
-}
-
-[data-theme="light"] .card-glow:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 20px rgba(0, 150, 255, 0.15);
   transform: translateY(-4px);
 }
 
