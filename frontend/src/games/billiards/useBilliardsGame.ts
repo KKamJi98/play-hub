@@ -1,20 +1,17 @@
 import { useCallback, useRef, useState } from "react";
-import { Vec2 } from "./physics/vector";
 import type { Ball } from "./physics/ball";
 import { createBall } from "./physics/ball";
+import { applyShotState, buildShotParams, powerToSpeedMps, type ShotParamsV2 } from "./physics/shot";
+import { Vec2 } from "./physics/vector";
 import {
   BALL_COLORS,
   BALL_RADIUS,
+  DEFAULT_ELEVATION_DEG,
   DEFAULT_TARGET_SCORE,
   TABLE_HEIGHT,
   TABLE_WIDTH,
-  MIN_SHOT_VELOCITY,
-  MAX_SHOT_VELOCITY,
-  MAX_SPIN_OMEGA,
 } from "./constants";
 import type { BallId } from "./constants";
-
-// ---- Types ----------------------------------------------------------------
 
 export type GamePhase =
   | "setup"
@@ -32,8 +29,12 @@ export interface ShotResult {
 
 export interface ShootData {
   direction: { x: number; y: number };
-  power: number;
-  spin: { x: number; y: number };
+  speedMps?: number;
+  tipOffset?: { x: number; y: number };
+  elevationDeg?: number;
+  shot?: ShotParamsV2;
+  power?: number;
+  spin?: { x: number; y: number };
   playerIndex?: number;
 }
 
@@ -47,11 +48,10 @@ export interface BilliardsState {
   mode: GameMode;
   winner: 0 | 1 | null;
   aimSpin: Vec2;
-  aimPower: number; // 0-100
+  aimPower: number;
   aimDirection: Vec2 | null;
+  aimElevationDeg: number;
 }
-
-// ---- Helpers ---------------------------------------------------------------
 
 function initialBalls(): Ball[] {
   const cx = TABLE_WIDTH / 2;
@@ -68,62 +68,32 @@ function cueBallIdForPlayer(player: 0 | 1): BallId {
   return player === 0 ? "white" : "yellow";
 }
 
-/**
- * Convert power (0-100) to velocity magnitude (m/s).
- */
-function powerToVelocity(power: number): number {
-  const t = Math.max(0, Math.min(100, power)) / 100;
-  return MIN_SHOT_VELOCITY + t * (MAX_SHOT_VELOCITY - MIN_SHOT_VELOCITY);
-}
-
-/**
- * Convert SpinSelector output (Vec2 in [-1,1]) to omega {x, y, z}.
- * - spin.x (left/right on selector) → omega.z (sidespin / english)
- * - spin.y (up/down on selector) applies follow / draw along the shot axis
- */
-export function spinToOmega(direction: Vec2, spin: Vec2): { x: number; y: number; z: number } {
-  if (direction.length() < 0.0001) {
-    return { x: 0, y: 0, z: 0 };
+function coerceShotFromData(data: ShootData): ShotParamsV2 {
+  if (data.shot) {
+    return data.shot;
   }
 
-  const dir = direction.normalize();
-  const rollAxis = new Vec2(-dir.y, dir.x);
-  const followDrawOmega = -spin.y * MAX_SPIN_OMEGA;
+  const direction = new Vec2(data.direction.x, data.direction.y);
+  const power = data.power ?? 50;
+  const legacySpin = data.spin ?? { x: 0, y: 0 };
 
   return {
-    x: rollAxis.x * followDrawOmega,
-    y: rollAxis.y * followDrawOmega,
-    z: spin.x * MAX_SPIN_OMEGA,
+    direction: { x: direction.normalize().x, y: direction.normalize().y },
+    speedMps: data.speedMps ?? powerToSpeedMps(power),
+    tipOffset: data.tipOffset ?? { x: legacySpin.x, y: legacySpin.y },
+    elevationDeg: data.elevationDeg ?? DEFAULT_ELEVATION_DEG,
   };
 }
 
-/**
- * Apply a shot to balls: set cue ball velocity and omega.
- */
 function applyShot(
   balls: Ball[],
   cueBallId: BallId,
-  direction: Vec2,
-  power: number,
-  spin: Vec2,
+  shot: ShotParamsV2,
 ): Ball[] {
-  const velocityMag = powerToVelocity(power);
-  const dir = direction.normalize();
-  const vel = new Vec2(dir.x * velocityMag, dir.y * velocityMag);
-  const omega = spinToOmega(dir, spin);
-
-  return balls.map((b) => {
-    if (b.id !== cueBallId) return b;
-    return {
-      ...b,
-      vel,
-      omega,
-      phase: "sliding" as const,
-    };
-  });
+  return balls.map((ball) => (
+    ball.id === cueBallId ? applyShotState(ball, shot) : ball
+  ));
 }
-
-// ---- Hook ------------------------------------------------------------------
 
 export function useBilliardsGame() {
   const [state, setState] = useState<BilliardsState>({
@@ -138,12 +108,10 @@ export function useBilliardsGame() {
     aimSpin: Vec2.zero(),
     aimPower: 50,
     aimDirection: null,
+    aimElevationDeg: DEFAULT_ELEVATION_DEG,
   });
 
-  /** Accumulated hits across the rolling phase for the current shot. */
   const accumulatedHitsRef = useRef<Set<BallId>>(new Set());
-
-  // -- Mode / settings -------------------------------------------------------
 
   const setMode = useCallback((mode: GameMode) => {
     setState((prev) => ({ ...prev, mode }));
@@ -165,11 +133,10 @@ export function useBilliardsGame() {
       aimSpin: Vec2.zero(),
       aimPower: 50,
       aimDirection: null,
+      aimElevationDeg: DEFAULT_ELEVATION_DEG,
     }));
     accumulatedHitsRef.current = new Set();
   }, []);
-
-  // -- Aim controls ----------------------------------------------------------
 
   const setAimSpin = useCallback((spin: Vec2) => {
     setState((prev) => ({ ...prev, aimSpin: spin }));
@@ -183,84 +150,78 @@ export function useBilliardsGame() {
     setState((prev) => ({ ...prev, aimDirection: dir }));
   }, []);
 
-  // -- Shot ------------------------------------------------------------------
+  const setAimElevationDeg = useCallback((elevationDeg: number) => {
+    setState((prev) => ({
+      ...prev,
+      aimElevationDeg: Math.max(0, elevationDeg),
+    }));
+  }, []);
 
-  const shoot = useCallback((direction: Vec2, power: number) => {
+  const buildShootData = useCallback((direction: Vec2, power: number): ShootData => {
+    const shot = buildShotParams(direction, power, state.aimSpin, state.aimElevationDeg);
+    return {
+      shot,
+      direction: shot.direction,
+      speedMps: shot.speedMps,
+      tipOffset: shot.tipOffset,
+      elevationDeg: shot.elevationDeg,
+      power,
+      spin: { x: state.aimSpin.x, y: state.aimSpin.y },
+    };
+  }, [state.aimElevationDeg, state.aimSpin]);
+
+  const applyShootData = useCallback((shootData: ShootData) => {
+    const shot = coerceShotFromData(shootData);
+
     setState((prev) => {
       if (prev.phase !== "aiming") return prev;
 
       const cueBallId = cueBallIdForPlayer(prev.currentPlayer);
-      const newBalls = applyShot(prev.balls, cueBallId, direction, power, prev.aimSpin);
-
       return {
         ...prev,
-        balls: newBalls,
-        phase: "rolling" as const,
+        balls: applyShot(prev.balls, cueBallId, shot),
+        phase: "rolling",
         aimSpin: Vec2.zero(),
         aimPower: 50,
         aimDirection: null,
+        aimElevationDeg: DEFAULT_ELEVATION_DEG,
       };
     });
+
     accumulatedHitsRef.current = new Set();
   }, []);
 
-  /**
-   * Apply an opponent's shot from online sync.
-   * This applies the exact same shot parameters to ensure deterministic physics.
-   */
+  const shoot = useCallback((direction: Vec2, power: number) => {
+    applyShootData(buildShootData(direction, power));
+  }, [applyShootData, buildShootData]);
+
   const applyOpponentShoot = useCallback((data: ShootData) => {
-    setState((prev) => {
-      if (prev.phase !== "aiming") return prev;
+    applyShootData(data);
+  }, [applyShootData]);
 
-      const cueBallId = cueBallIdForPlayer(prev.currentPlayer);
-      const direction = new Vec2(data.direction.x, data.direction.y);
-      const spin = new Vec2(data.spin.x, data.spin.y);
-      const newBalls = applyShot(prev.balls, cueBallId, direction, data.power, spin);
-
-      return {
-        ...prev,
-        balls: newBalls,
-        phase: "rolling" as const,
-        aimDirection: null,
-      };
-    });
-    accumulatedHitsRef.current = new Set();
-  }, []);
-
-  // -- Physics frame callback ------------------------------------------------
-
-  /** Called from the canvas animation loop each frame while rolling. */
   const onPhysicsFrame = useCallback(
     (balls: Ball[], frameHits: Set<BallId>, stopped: boolean) => {
-      // Accumulate hits
-      for (const h of frameHits) {
-        accumulatedHitsRef.current.add(h);
+      for (const hit of frameHits) {
+        accumulatedHitsRef.current.add(hit);
       }
 
       if (!stopped) {
-        // Just update ball positions (mutable from engine, mirror to state)
         setState((prev) => ({ ...prev, balls: [...balls] }));
         return;
       }
 
-      // Shot finished – evaluate
       const allHits = Array.from(accumulatedHitsRef.current);
 
       setState((prev) => {
         const cueBallId = cueBallIdForPlayer(prev.currentPlayer);
         const opponentCueBallId: BallId = prev.currentPlayer === 0 ? "yellow" : "white";
-        // Count how many of the OTHER 3 balls the cue ball hit
         const otherBallsHit = allHits.filter((id) => id !== cueBallId);
         const hitOpponentCue = otherBallsHit.includes(opponentCueBallId);
         const currentScore = prev.scores[prev.currentPlayer];
 
         const newScores: [number, number] = [prev.scores[0], prev.scores[1]];
-
-        // 4구 패널티 규칙:
-        // - 상대 수구를 맞추면 무조건 -1점 (현재 점수 >= 1일 때)
-        // - 아무 공도 못 맞히면 -1점 (현재 점수 >= 1일 때)
-        // - 빨간공 2개 이상 맞추고 상대 수구는 안 맞춤 = 정상 득점
         let scored = false;
+
         if (hitOpponentCue && currentScore >= 1) {
           newScores[prev.currentPlayer] -= 1;
         } else if (otherBallsHit.length >= 2 && !hitOpponentCue) {
@@ -275,51 +236,42 @@ export function useBilliardsGame() {
           scored,
         };
 
-        // Check win
         const playerScore = newScores[prev.currentPlayer];
-        const won = playerScore >= prev.targetScore;
-        if (won) {
+        if (playerScore >= prev.targetScore) {
           return {
             ...prev,
             balls: [...balls],
             scores: newScores,
             shotResult,
-            phase: "gameOver" as const,
+            phase: "gameOver",
             winner: prev.currentPlayer,
           };
         }
 
         if (scored) {
-          // 득점 시 같은 플레이어가 계속, 결과 오버레이 표시
           return {
             ...prev,
             balls: [...balls],
             scores: newScores,
             shotResult,
-            phase: "scoring" as const,
+            phase: "scoring",
             currentPlayer: prev.currentPlayer,
           };
-        } else {
-          // 실패 시 바로 턴 전환 (오버레이 없이)
-          const nextPlayer: 0 | 1 = prev.currentPlayer === 0 ? 1 : 0;
-          return {
-            ...prev,
-            balls: [...balls],
-            scores: newScores,
-            shotResult: null,
-            phase: "aiming" as const,
-            currentPlayer: nextPlayer,
-          };
         }
+
+        return {
+          ...prev,
+          balls: [...balls],
+          scores: newScores,
+          shotResult: null,
+          phase: "aiming",
+          currentPlayer: prev.currentPlayer === 0 ? 1 : 0,
+        };
       });
     },
     [],
   );
 
-  /**
-   * Sync state from opponent's SCORE_UPDATE action.
-   * Overwrites scores, currentPlayer, phase, and winner from remote data.
-   */
   const syncFromOpponent = useCallback(
     (data: {
       scores: [number, number];
@@ -329,12 +281,18 @@ export function useBilliardsGame() {
     }) => {
       setState((prev) => {
         const winner = data.winner >= 0 ? (data.winner as 0 | 1) : null;
-        const phase = winner !== null ? "gameOver" : data.phase === "scoring" ? "scoring" : "aiming";
+        const phase =
+          winner !== null
+            ? "gameOver"
+            : data.phase === "scoring"
+              ? "scoring"
+              : "aiming";
+
         return {
           ...prev,
           scores: data.scores,
           currentPlayer: data.currentPlayer,
-          phase: phase as GamePhase,
+          phase,
           winner,
         };
       });
@@ -342,16 +300,13 @@ export function useBilliardsGame() {
     [],
   );
 
-  /** Dismiss scoring overlay and go to aiming. */
   const continueAfterScore = useCallback(() => {
     setState((prev) => ({
       ...prev,
-      phase: "aiming" as const,
+      phase: "aiming",
       shotResult: null,
     }));
   }, []);
-
-  // -- Reset -----------------------------------------------------------------
 
   const reset = useCallback(() => {
     accumulatedHitsRef.current = new Set();
@@ -367,6 +322,7 @@ export function useBilliardsGame() {
       aimSpin: Vec2.zero(),
       aimPower: 50,
       aimDirection: null,
+      aimElevationDeg: DEFAULT_ELEVATION_DEG,
     });
   }, []);
 
@@ -378,6 +334,8 @@ export function useBilliardsGame() {
     setAimSpin,
     setAimPower,
     setAimDirection,
+    setAimElevationDeg,
+    buildShootData,
     shoot,
     applyOpponentShoot,
     syncFromOpponent,

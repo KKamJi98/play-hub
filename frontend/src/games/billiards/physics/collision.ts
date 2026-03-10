@@ -2,78 +2,106 @@ import type { Ball } from "./ball";
 import { Vec2 } from "./vector";
 import {
   E_BB,
-  MU_BB,
   E_C,
-  MU_C,
   M,
+  MU_BB,
+  MU_C,
   R,
-  TABLE_WIDTH,
   TABLE_HEIGHT,
+  TABLE_WIDTH,
 } from "../constants";
 
-// ---- Ball-ball collision --------------------------------------------------
+export type CollisionEvent =
+  | {
+      type: "ball-ball";
+      ballId: Ball["id"];
+      otherBallId: Ball["id"];
+      point: Vec2;
+    }
+  | {
+      type: "cushion";
+      ballId: Ball["id"];
+      normal: Vec2;
+      point: Vec2;
+    };
 
-/**
- * Resolve ball-ball collision with impulse-based dynamics + Coulomb friction.
- * Returns true if a collision occurred.
- */
-export function resolveBallBall(a: Ball, b: Ball): boolean {
+export function resolveBallBall(a: Ball, b: Ball, events?: CollisionEvent[]): boolean {
   const diff = a.pos.sub(b.pos);
   const dist = diff.length();
   const minDist = a.radius + b.radius;
 
   if (dist >= minDist || dist === 0) return false;
 
-  // Separate overlapping balls
   separateBalls(a, b, diff, dist, minDist);
 
-  // Normal from b → a
   const normal = diff.scale(1 / dist);
-  // Tangent (perpendicular to normal)
   const tangent = normal.perp();
-
-  // Relative velocity along normal
   const relVel = a.vel.sub(b.vel);
   const velAlongNormal = relVel.dot(normal);
 
-  // Don't resolve if balls are separating
   if (velAlongNormal > 0) return true;
 
-  // Impulse-based response for equal masses
-  const Jn = -(1 + E_BB) * velAlongNormal * (M / 2);
+  const jn = -(1 + E_BB) * velAlongNormal * (M / 2);
+  const nx = normal.x;
+  const ny = normal.y;
+
+  // 2D tangential relative surface velocity (in-plane, existing)
   const relTangentVel = relVel.dot(tangent) - R * (a.omega.z + b.omega.z);
+  // Vertical relative surface velocity at contact (topspin/backspin transfer)
+  const relVerticalVel = R * (nx * (a.omega.y + b.omega.y) - ny * (a.omega.x + b.omega.x));
+
+  // Effective masses for tangential impulses (I = 2/5 MR², equal-mass balls):
+  //   Tangent (in-plane): 1/m_eff = 2/M + 2R²/I = 7/M → m_eff = M/7
+  //   Vertical (constrained, torque-only): 1/m_eff = 2R²/I = 5/M → m_eff = M/5
+  // Both balls receive same-sign omega delta (contact geometry, like meshing gears).
   const desiredJt = -(M / 7) * relTangentVel;
-  const maxJt = MU_BB * Jn;
-  const Jt = Math.max(-maxJt, Math.min(maxJt, desiredJt));
+  const desiredJz = -(M / 5) * relVerticalVel;
 
-  // Apply normal impulse
-  const normalImpulse = normal.scale(Jn / M);
-  a.vel = a.vel.add(normalImpulse);
-  b.vel = b.vel.sub(normalImpulse);
+  // Clamp combined tangential impulse within friction cone
+  const maxJ = MU_BB * jn;
+  const desiredMag = Math.sqrt(desiredJt * desiredJt + desiredJz * desiredJz);
+  let jt: number;
+  let jz: number;
+  if (desiredMag <= maxJ || desiredMag === 0) {
+    jt = desiredJt;
+    jz = desiredJz;
+  } else {
+    const scale = maxJ / desiredMag;
+    jt = desiredJt * scale;
+    jz = desiredJz * scale;
+  }
 
-  // Apply tangential impulse
-  const tangentImpulse = tangent.scale(Jt / M);
-  a.vel = a.vel.add(tangentImpulse);
-  b.vel = b.vel.sub(tangentImpulse);
+  const normalImpulse = normal.scale(jn / M);
+  const tangentImpulse = tangent.scale(jt / M);
 
-  // Tangential impulse spins both balls in the same signed direction.
-  const deltaOmegaZ = (-5 * Jt) / (2 * M * R);
+  a.vel = a.vel.add(normalImpulse).add(tangentImpulse);
+  b.vel = b.vel.sub(normalImpulse).sub(tangentImpulse);
+
+  // Z-axis spin transfer (sidespin, from tangent impulse)
+  const deltaOmegaZ = (-5 * jt) / (2 * M * R);
   a.omega.z += deltaOmegaZ;
   b.omega.z += deltaOmegaZ;
 
-  // Rolling snap: set omega to match new velocity (pure rolling)
-  a.omega.x = -a.vel.y / R;
-  a.omega.y = a.vel.x / R;
-  b.omega.x = -b.vel.y / R;
-  b.omega.y = b.vel.x / R;
+  // X/Y spin transfer (topspin/backspin, from vertical impulse)
+  const spinFactor = 5 / (2 * M * R);
+  a.omega.x += -ny * jz * spinFactor;
+  a.omega.y += nx * jz * spinFactor;
+  b.omega.x += -ny * jz * spinFactor;
+  b.omega.y += nx * jz * spinFactor;
 
-  a.phase = "rolling";
-  b.phase = "rolling";
+  a.phase = "sliding";
+  b.phase = "sliding";
+
+  events?.push({
+    type: "ball-ball",
+    ballId: a.id,
+    otherBallId: b.id,
+    point: a.pos.add(b.pos).scale(0.5),
+  });
 
   return true;
 }
 
-/** Push apart two overlapping balls. Mutates positions. */
 export function separateBalls(
   a: Ball,
   b: Ball,
@@ -87,67 +115,51 @@ export function separateBalls(
   b.pos = b.pos.sub(correction);
 }
 
-// ---- Ball-cushion collision (Han 2005 simplified) -------------------------
-
-/**
- * Resolve ball-cushion (wall) bounce with sidespin effects.
- * Uses the Han 2005 simplified model:
- *   v_n' = -e_c · v_n
- *   v_t' = (5/7) · v_t + (2/7) · R · ωz
- */
-export function resolveBallCushion(ball: Ball): void {
+export function resolveBallCushion(ball: Ball, events?: CollisionEvent[]): void {
   const r = ball.radius;
 
-  // Left wall
   if (ball.pos.x - r < 0) {
     ball.pos = new Vec2(r, ball.pos.y);
-    applyCushionBounce(ball, new Vec2(1, 0));
+    applyCushionBounce(ball, new Vec2(1, 0), events);
   }
-  // Right wall
   if (ball.pos.x + r > TABLE_WIDTH) {
     ball.pos = new Vec2(TABLE_WIDTH - r, ball.pos.y);
-    applyCushionBounce(ball, new Vec2(-1, 0));
+    applyCushionBounce(ball, new Vec2(-1, 0), events);
   }
-  // Top wall
   if (ball.pos.y - r < 0) {
     ball.pos = new Vec2(ball.pos.x, r);
-    applyCushionBounce(ball, new Vec2(0, 1));
+    applyCushionBounce(ball, new Vec2(0, 1), events);
   }
-  // Bottom wall
   if (ball.pos.y + r > TABLE_HEIGHT) {
     ball.pos = new Vec2(ball.pos.x, TABLE_HEIGHT - r);
-    applyCushionBounce(ball, new Vec2(0, -1));
+    applyCushionBounce(ball, new Vec2(0, -1), events);
   }
 }
 
-/**
- * Apply cushion bounce physics along a given inward normal.
- * Han 2005 simplified: v_n' = -e_c * v_n, v_t' = (5/7)*v_t + (2/7)*R*ωz
- */
-function applyCushionBounce(ball: Ball, inwardNormal: Vec2): void {
+function applyCushionBounce(ball: Ball, inwardNormal: Vec2, events?: CollisionEvent[]): void {
   const vn = ball.vel.dot(inwardNormal);
-
-  // Only bounce if moving into the cushion
   if (vn >= 0) return;
 
   const tangent = inwardNormal.perp();
   const vt = ball.vel.dot(tangent);
-  const Jn = -(1 + E_C) * vn * M;
+  const jn = -(1 + E_C) * vn * M;
   const surfaceSlip = vt - R * ball.omega.z;
   const desiredJt = -(2 * M / 7) * surfaceSlip;
-  const maxJt = MU_C * Jn;
-  const Jt = Math.max(-maxJt, Math.min(maxJt, desiredJt));
+  const maxJt = MU_C * jn;
+  const jt = Math.max(-maxJt, Math.min(maxJt, desiredJt));
 
   const vnNew = -E_C * vn;
-  const vtNew = vt + Jt / M;
-  const deltaOmegaZ = (-5 * Jt) / (2 * M * R);
+  const vtNew = vt + jt / M;
+  const deltaOmegaZ = (-5 * jt) / (2 * M * R);
 
   ball.vel = inwardNormal.scale(vnNew).add(tangent.scale(vtNew));
   ball.omega.z += deltaOmegaZ;
+  ball.phase = "sliding";
 
-  // Rolling snap: set omega to match new velocity (pure rolling)
-  ball.omega.x = -ball.vel.y / R;
-  ball.omega.y = ball.vel.x / R;
-
-  ball.phase = "rolling";
+  events?.push({
+    type: "cushion",
+    ballId: ball.id,
+    normal: inwardNormal,
+    point: ball.pos,
+  });
 }

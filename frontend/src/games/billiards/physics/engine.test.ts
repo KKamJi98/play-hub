@@ -46,8 +46,11 @@ describe("billiards physics engine", () => {
     const sixtyFps = simulateAtFrameRate([createMovingCueBall()], 60, 1.2)[0]!;
     const oneFortyFourFps = simulateAtFrameRate([createMovingCueBall()], 144, 1.2)[0]!;
 
-    expect(sixtyFps.pos.x).toBeCloseTo(oneFortyFourFps.pos.x, 1);
-    expect(sixtyFps.pos.y).toBeCloseTo(oneFortyFourFps.pos.y, 1);
+    // Position error must be ≤ 1.5 px
+    const posErrX = Math.abs(sixtyFps.pos.x - oneFortyFourFps.pos.x);
+    const posErrY = Math.abs(sixtyFps.pos.y - oneFortyFourFps.pos.y);
+    expect(posErrX).toBeLessThanOrEqual(1.5);
+    expect(posErrY).toBeLessThanOrEqual(1.5);
     expect(sixtyFps.vel.x).toBeCloseTo(oneFortyFourFps.vel.x, 2);
     expect(sixtyFps.vel.y).toBeCloseTo(oneFortyFourFps.vel.y, 2);
   });

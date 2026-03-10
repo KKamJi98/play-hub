@@ -54,14 +54,22 @@ class BilliardsHandler : GameHandler<BilliardsState, Any> {
             "SHOOT" -> {
                 // Extract physics data and embed into state for relay.
                 // The opponent client uses these parameters to replay the shot.
+                val shot = actionMap["shot"] as? Map<*, *>
                 val direction = actionMap["direction"] as? Map<*, *>
+                val speedMps = (actionMap["speedMps"] as? Number)?.toDouble()
+                val tipOffset = actionMap["tipOffset"] as? Map<*, *>
+                val elevationDeg = (actionMap["elevationDeg"] as? Number)?.toDouble()
                 val power = (actionMap["power"] as? Number)?.toDouble()
                 val spin = actionMap["spin"] as? Map<*, *>
 
                 val shootData = mutableMapOf<String, Any>()
                 shootData["type"] = "SHOOT"
                 shootData["playerIndex"] = playerIndex
+                if (shot != null) shootData["shot"] = shot
                 if (direction != null) shootData["direction"] = direction
+                if (speedMps != null) shootData["speedMps"] = speedMps
+                if (tipOffset != null) shootData["tipOffset"] = tipOffset
+                if (elevationDeg != null) shootData["elevationDeg"] = elevationDeg
                 if (power != null) shootData["power"] = power
                 if (spin != null) shootData["spin"] = spin
 

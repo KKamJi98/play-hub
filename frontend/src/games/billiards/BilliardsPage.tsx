@@ -1,15 +1,28 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useBilliardsGame } from "./useBilliardsGame";
 import type { GameMode, ShootData } from "./useBilliardsGame";
 import BilliardsCanvas from "./BilliardsCanvas";
 import SpinSelector from "./SpinSelector";
-import { TARGET_SCORE_OPTIONS, BALL_COLORS } from "./constants";
+import { TARGET_SCORE_OPTIONS, BALL_COLORS, MAX_ELEVATION_DEGREES } from "./constants";
 import type { BallId } from "./constants";
+import { Vec2 } from "./physics/vector";
 import { useOnlineGame } from "../../hooks/useOnlineGame";
 import OnlineLobby from "../../components/online/OnlineLobby";
 import GameViewport from "../../components/game/GameViewport";
 import { useCoarsePointer } from "../../hooks/useCoarsePointer";
 import { useDisplaySettings } from "../../hooks/useDisplaySettings";
+
+// ---- Shot presets ----------------------------------------------------------
+
+const SHOT_PRESETS: { label: string; tip: [number, number]; elev: number }[] = [
+  { label: "Center", tip: [0, 0], elev: 0 },
+  { label: "Follow", tip: [0, -0.6], elev: 0 },
+  { label: "Draw", tip: [0, 0.6], elev: 0 },
+  { label: "Left", tip: [-0.5, 0], elev: 0 },
+  { label: "Right", tip: [0.5, 0], elev: 0 },
+  { label: "Swerve", tip: [0.5, 0], elev: 12 },
+  { label: "Masse", tip: [0.7, 0.3], elev: 22 },
+];
 
 // ---- Mode options ----------------------------------------------------------
 
@@ -360,6 +373,40 @@ function PowerSlider({
   );
 }
 
+function AdvancedSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-2">
+      <div className="flex items-center justify-between text-xs text-[#8892a4]">
+        <span>{label}</span>
+        <span className="font-mono">{value.toFixed(0)}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="accent-cyan-400"
+      />
+    </label>
+  );
+}
+
 // ---- Main page component ---------------------------------------------------
 
 export default function BilliardsPage() {
@@ -371,6 +418,8 @@ export default function BilliardsPage() {
     setAimSpin,
     setAimPower,
     setAimDirection,
+    setAimElevationDeg,
+    buildShootData,
     shoot,
     applyOpponentShoot,
     syncFromOpponent,
@@ -381,6 +430,8 @@ export default function BilliardsPage() {
 
   const online = useOnlineGame("billiards", { onGameStarted: startGame });
   const isCoarsePointer = useCoarsePointer();
+  const [showAdvancedControls, setShowAdvancedControls] = useState(false);
+  const [showDebugOverlay, setShowDebugOverlay] = useState(false);
 
   const cueBallId: BallId =
     state.currentPlayer === 0 ? "white" : "yellow";
@@ -405,18 +456,13 @@ export default function BilliardsPage() {
     const direction = state.aimDirection;
     if (!direction) return;
     const power = state.aimPower;
+    const shootData = buildShootData(direction, power);
 
     if (isOnlineMode && isMyTurn) {
-      const shootData: ShootData = {
-        direction: { x: direction.x, y: direction.y },
-        power,
-        spin: { x: state.aimSpin.x, y: state.aimSpin.y },
-        playerIndex: myPlayerIndex ?? 0,
-      };
-      online.sendAction({ type: "SHOOT", ...shootData });
+      online.sendAction({ type: "SHOOT", ...shootData, playerIndex: myPlayerIndex ?? 0 });
     }
     shoot(direction, power);
-  }, [state.aimDirection, state.aimPower, state.aimSpin, isOnlineMode, isMyTurn, myPlayerIndex, online, shoot]);
+  }, [buildShootData, state.aimDirection, state.aimPower, isOnlineMode, isMyTurn, myPlayerIndex, online, shoot]);
 
   // ---- Online sync: receive opponent's SHOOT action ------------------------
 
@@ -428,6 +474,10 @@ export default function BilliardsPage() {
       lastAction?: {
         type?: string;
         direction?: { x: number; y: number };
+        speedMps?: number;
+        tipOffset?: { x: number; y: number };
+        elevationDeg?: number;
+        shot?: ShootData["shot"];
         power?: number;
         spin?: { x: number; y: number };
         playerIndex?: number;
@@ -448,6 +498,10 @@ export default function BilliardsPage() {
     if (lastAction.type === "SHOOT" && lastAction.playerIndex !== myPlayerIndex && state.phase === "aiming") {
       applyOpponentShoot({
         direction: lastAction.direction ?? { x: 0, y: 0 },
+        speedMps: lastAction.speedMps,
+        tipOffset: lastAction.tipOffset,
+        elevationDeg: lastAction.elevationDeg,
+        shot: lastAction.shot,
         power: lastAction.power ?? 50,
         spin: lastAction.spin ?? { x: 0, y: 0 },
       });
@@ -592,9 +646,11 @@ export default function BilliardsPage() {
               aimPower={state.aimPower}
               aimDirection={state.aimDirection}
               aimSpin={state.aimSpin}
+              aimElevationDeg={state.aimElevationDeg}
               onAimChange={setAimDirection}
               onPhysicsFrame={onPhysicsFrame}
               disabled={!isMyTurn}
+              showDebugOverlay={showDebugOverlay}
             />
           </div>
 
@@ -646,6 +702,54 @@ export default function BilliardsPage() {
                       <PowerSlider value={state.aimPower} onChange={setAimPower} />
                     </div>
                   </div>
+
+                  <button
+                    onClick={() => setShowAdvancedControls((prev) => !prev)}
+                    className="mt-4 w-full rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-left text-sm text-[#c2d3ea] transition hover:bg-black/15 [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-gray-50"
+                  >
+                    Advanced Shot {showAdvancedControls ? "숨기기" : "열기"}
+                  </button>
+
+                  {showAdvancedControls && (
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-black/10 px-4 py-4 [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-gray-50">
+                      <div className="flex flex-col gap-4">
+                        <div>
+                          <p className="text-xs text-[#8892a4] mb-2">Presets</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {SHOT_PRESETS.map((preset) => (
+                              <button
+                                key={preset.label}
+                                onClick={() => {
+                                  setAimSpin(new Vec2(preset.tip[0], preset.tip[1]));
+                                  setAimElevationDeg(preset.elev);
+                                }}
+                                className="touch-manipulation rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-[#c2d3ea] transition hover:bg-white/10 active:scale-95"
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <AdvancedSlider
+                          label="Cue Elevation"
+                          value={state.aimElevationDeg}
+                          min={0}
+                          max={MAX_ELEVATION_DEGREES}
+                          step={1}
+                          onChange={setAimElevationDeg}
+                        />
+                        <label className="flex items-center justify-between text-sm text-[#c2d3ea]">
+                          <span>Debug Overlay</span>
+                          <input
+                            type="checkbox"
+                            checked={showDebugOverlay}
+                            onChange={(e) => setShowDebugOverlay(e.target.checked)}
+                            className="h-4 w-4 accent-cyan-400"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  )}
 
                   <button
                     onClick={handleShoot}
