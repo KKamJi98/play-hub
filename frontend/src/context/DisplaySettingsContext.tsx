@@ -9,7 +9,7 @@ import {
 
 export const MIN_SCALE = 0.5;
 export const MAX_SCALE = 2.0;
-export const SCALE_STEP = 0.05;
+export const SCALE_STEP = 0.1;
 
 const STORAGE_KEY = "play-hub-ui-scale";
 

@@ -34,7 +34,7 @@ export const MU_SP = 0.044;
 export const MU_BB = 0.06;
 
 /** Ball-ball coefficient of restitution */
-export const E_BB = 0.92;
+export const E_BB = 0.95;
 
 /** Ball-cushion friction coefficient */
 export const MU_C = 0.14;
