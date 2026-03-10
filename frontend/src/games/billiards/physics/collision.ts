@@ -143,7 +143,7 @@ function applyCushionBounce(ball: Ball, inwardNormal: Vec2, events?: CollisionEv
   const tangent = inwardNormal.perp();
   const vt = ball.vel.dot(tangent);
   const jn = -(1 + E_C) * vn * M;
-  const surfaceSlip = vt - R * ball.omega.z;
+  const surfaceSlip = vt + R * ball.omega.z;
   const desiredJt = -(2 * M / 7) * surfaceSlip;
   const maxJt = MU_C * jn;
   const jt = Math.max(-maxJt, Math.min(maxJt, desiredJt));

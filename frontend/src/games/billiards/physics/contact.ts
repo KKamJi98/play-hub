@@ -56,8 +56,8 @@ export function clothTorqueDelta(force: Vec2, dt: number): Pick<Omega3, "x" | "y
 export function cushionSlipVelocity(ball: Ball, inwardNormal: Vec2): number {
   const tangent = inwardNormal.perp();
   const contactVel = new Vec2(
-    ball.vel.x + R * ball.omega.z * inwardNormal.y,
-    ball.vel.y - R * ball.omega.z * inwardNormal.x,
+    ball.vel.x - R * ball.omega.z * inwardNormal.y,
+    ball.vel.y + R * ball.omega.z * inwardNormal.x,
   );
 
   return contactVel.dot(tangent);
