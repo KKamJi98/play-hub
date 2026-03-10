@@ -24,8 +24,8 @@ export const g = 9.81;
 /** Ball-cloth sliding friction coefficient */
 export const MU_S = 0.2;
 
-/** Ball-cloth rolling resistance coefficient (increased for realistic deceleration) */
-export const MU_R = 0.025;
+/** Ball-cloth rolling resistance coefficient */
+export const MU_R = 0.012;
 
 /** Ball-cloth spinning friction coefficient */
 export const MU_SP = 0.044;
@@ -39,8 +39,8 @@ export const E_BB = 0.92;
 /** Ball-cushion friction coefficient */
 export const MU_C = 0.14;
 
-/** Ball-cushion coefficient of restitution (realistic: cushions absorb ~30% energy) */
-export const E_C = 0.7;
+/** Ball-cushion coefficient of restitution */
+export const E_C = 0.82;
 
 // ---- Coordinate conversion ------------------------------------------------
 

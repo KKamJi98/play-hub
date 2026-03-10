@@ -87,7 +87,7 @@ export function createShotMotion(shot: ShotParamsV2): { vel: Vec2; omega: Omega3
   const tipVector = {
     x: right3.x * tip.x * R,
     y: right3.y * tip.x * R,
-    z: tip.y * R,
+    z: -tip.y * R,
   };
   const impulse = scale3(forward3, M * shot.speedMps * TIP_SPIN_EFFICIENCY);
   const omegaVector = clampMagnitude3(
