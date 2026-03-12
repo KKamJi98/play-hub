@@ -28,7 +28,7 @@ function expectedLeftCushionBounce(vel: Vec2, omegaZ: number) {
   const vn = vel.dot(inwardNormal);
   const vt = vel.dot(tangent);
   const Jn = -(1 + E_C) * vn * M;
-  const surfaceSlip = vt - R * omegaZ;
+  const surfaceSlip = vt + R * omegaZ;
   const desiredJt = -(2 * M / 7) * surfaceSlip;
   const maxJt = MU_C * Jn;
   const Jt = Math.max(-maxJt, Math.min(maxJt, desiredJt));

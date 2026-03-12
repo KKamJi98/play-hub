@@ -102,20 +102,43 @@ export function applySlidingContact(ball: Ball, dt: number): void {
     return;
   }
 
+  const startVel = ball.vel;
+  const startOmega = { ...ball.omega };
   const frictionForce = contact.slip.scale((-MU_S * M * g) / contact.slipSpeed);
   const acceleration = frictionForce.scale(1 / M);
   const torqueDelta = clothTorqueDelta(frictionForce, dt);
 
-  ball.vel = ball.vel.add(acceleration.scale(dt));
-  ball.omega.x += torqueDelta.x;
-  ball.omega.y += torqueDelta.y;
-  ball.omega.z = applySpinDecay(ball.omega.z, dt);
+  const nextVel = startVel.add(acceleration.scale(dt));
+  const nextOmega = {
+    x: startOmega.x + torqueDelta.x,
+    y: startOmega.y + torqueDelta.y,
+    z: applySpinDecay(startOmega.z, dt),
+  };
+
+  ball.vel = nextVel;
+  ball.omega.x = nextOmega.x;
+  ball.omega.y = nextOmega.y;
+  ball.omega.z = nextOmega.z;
 
   const slipAfter = clothContactVelocity(ball);
   if (slipAfter.dot(contact.slip) <= 0) {
+    const slipDirection = contact.slip.scale(1 / contact.slipSpeed);
+    const endSlipAlongStart = slipAfter.dot(slipDirection);
+    const transitionRatio = Math.max(
+      0,
+      Math.min(1, contact.slipSpeed / (contact.slipSpeed - endSlipAlongStart)),
+    );
+    const slidingDt = dt * transitionRatio;
+    const rollingDt = dt - slidingDt;
+
+    ball.vel = startVel.add(acceleration.scale(slidingDt));
+    ball.omega.z = applySpinDecay(startOmega.z, slidingDt);
     const rollingOmega = rollingOmegaForVelocity(ball.vel);
     ball.omega.x = rollingOmega.x;
     ball.omega.y = rollingOmega.y;
+    if (rollingDt > 0) {
+      applyRollingContact(ball, rollingDt);
+    }
   }
 }
 

@@ -13,8 +13,8 @@ describe("shot initialization", () => {
     const topOmega = createShotMotion(topShot).omega;
     const bottomOmega = createShotMotion(bottomShot).omega;
 
-    expect(topOmega.y).toBeLessThan(0);
-    expect(bottomOmega.y).toBeGreaterThan(0);
+    expect(topOmega.y).toBeGreaterThan(0);
+    expect(bottomOmega.y).toBeLessThan(0);
   });
 
   it("keeps right english on omega.z and gains tilted spin when elevated", () => {

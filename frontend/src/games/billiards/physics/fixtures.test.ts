@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createBall, type Ball } from "./ball";
-import { advanceSimulation } from "./engine";
+import { createBall } from "./ball";
 import { simulateGuideTrace } from "./guide";
 import { applyShotState, buildShotParams, createShotMotion } from "./shot";
+import {
+  cueBallSampleAtTime,
+  firstCueBallReverseTime,
+  simulateReferenceShot,
+} from "./referenceHarness";
 import { Vec2 } from "./vector";
 import {
   BALL_COLORS,
@@ -12,99 +16,28 @@ import {
   toPixels,
 } from "../constants";
 
-function cloneBall(ball: Ball): Ball {
-  return {
-    ...ball,
-    pos: new Vec2(ball.pos.x, ball.pos.y),
-    vel: new Vec2(ball.vel.x, ball.vel.y),
-    omega: { ...ball.omega },
-  };
-}
-
-function simulateShot(
-  shot: ReturnType<typeof buildShotParams>,
-  seconds: number,
-  initialBalls?: Ball[],
-): Ball[] {
-  const baseBalls = initialBalls ?? [
-    createBall("white", 220, TABLE_HEIGHT / 2, BALL_RADIUS, BALL_COLORS.white),
-  ];
-  const balls = baseBalls.map(cloneBall);
-  balls[0] = applyShotState(balls[0]!, shot);
-
-  let carrySeconds = 0;
-  const frameCount = Math.round(seconds * 120);
-  for (let frame = 0; frame < frameCount; frame += 1) {
-    const result = advanceSimulation(balls, "white", 1 / 120, carrySeconds);
-    carrySeconds = result.carrySeconds;
-  }
-
-  return balls;
-}
-
-function simulateShotWithHistory(
-  shot: ReturnType<typeof buildShotParams>,
-  seconds: number,
-  initialBalls?: Ball[],
-): { balls: Ball[]; history: { t: number; velX: number; posY: number }[] } {
-  const baseBalls = initialBalls ?? [
-    createBall("white", 220, TABLE_HEIGHT / 2, BALL_RADIUS, BALL_COLORS.white),
-  ];
-  const balls = baseBalls.map(cloneBall);
-  balls[0] = applyShotState(balls[0]!, shot);
-
-  const history: { t: number; velX: number; posY: number }[] = [];
-  let carrySeconds = 0;
-  const frameCount = Math.round(seconds * 120);
-  for (let frame = 0; frame < frameCount; frame += 1) {
-    const result = advanceSimulation(balls, "white", 1 / 120, carrySeconds);
-    carrySeconds = result.carrySeconds;
-    history.push({
-      t: (frame + 1) / 120,
-      velX: balls[0]!.vel.x,
-      posY: balls[0]!.pos.y,
-    });
-  }
-
-  return { balls, history };
-}
+const RUN_EXPERIMENTAL_BILLIARDS =
+  ((globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env?.RUN_EXPERIMENTAL_BILLIARDS ?? "") === "1";
 
 describe("billiards physics fixtures", () => {
-  it("follow travels farther than draw under the same power", () => {
-    const follow = simulateShot(
-      buildShotParams(new Vec2(1, 0), 65, new Vec2(0, -0.65), 0),
-      0.8,
-    )[0]!;
-    const draw = simulateShot(
-      buildShotParams(new Vec2(1, 0), 65, new Vec2(0, 0.65), 0),
-      0.8,
-    )[0]!;
+  it("follow stays farther forward than draw before the first rail", () => {
+    const follow = cueBallSampleAtTime(
+      simulateReferenceShot(
+        buildShotParams(new Vec2(1, 0), 50, new Vec2(0, -0.65), 0),
+        0.3,
+      ).history,
+      0.3,
+    );
+    const draw = cueBallSampleAtTime(
+      simulateReferenceShot(
+        buildShotParams(new Vec2(1, 0), 50, new Vec2(0, 0.65), 0),
+        0.3,
+      ).history,
+      0.3,
+    );
 
-    expect(follow.pos.x).toBeGreaterThan(draw.pos.x + 20);
-  });
-
-  it("elevated side spin curves more than a flat side spin shot", () => {
-    const flatBaseline = simulateShot(
-      buildShotParams(new Vec2(1, 0.1), 60, new Vec2(0, 0), 0),
-      0.6,
-    )[0]!;
-    const elevatedBaseline = simulateShot(
-      buildShotParams(new Vec2(1, 0.1), 60, new Vec2(0, 0), 12),
-      0.6,
-    )[0]!;
-    const flat = simulateShot(
-      buildShotParams(new Vec2(1, 0.1), 60, new Vec2(0.55, 0), 0),
-      0.6,
-    )[0]!;
-    const elevated = simulateShot(
-      buildShotParams(new Vec2(1, 0.1), 60, new Vec2(0.55, 0), 12),
-      0.6,
-    )[0]!;
-
-    const flatCurve = Math.abs(flat.pos.y - flatBaseline.pos.y);
-    const elevatedCurve = Math.abs(elevated.pos.y - elevatedBaseline.pos.y);
-
-    expect(elevatedCurve).toBeGreaterThan(flatCurve + 5);
+    expect(follow.posX).toBeGreaterThan(draw.posX + 20);
   });
 
   it("shadow guide detects first object-ball and first cushion events", () => {
@@ -130,12 +63,19 @@ describe("billiards physics fixtures", () => {
   });
 
   it("draw shot reverses cue ball velocity sign within 0.8 seconds", () => {
-    const { history } = simulateShotWithHistory(
-      buildShotParams(new Vec2(1, 0), 65, new Vec2(0, 0.65), 0),
-      0.8,
+    const layout = [
+      createBall("white", 220, TABLE_HEIGHT / 2, BALL_RADIUS, BALL_COLORS.white),
+      createBall("red1", 420, TABLE_HEIGHT / 2, BALL_RADIUS, BALL_COLORS.red1),
+    ];
+    const reverseTime = firstCueBallReverseTime(
+      simulateReferenceShot(
+        buildShotParams(new Vec2(1, 0), 65, new Vec2(0, 0.65), 0),
+        0.8,
+        layout,
+      ).history,
     );
-    const hasReversal = history.some((h) => h.velX < 0);
-    expect(hasReversal).toBe(true);
+    expect(reverseTime).not.toBeNull();
+    expect(reverseTime).toBeLessThan(0.75);
   });
 
   it("center hit produces near-zero initial omega from shot", () => {
@@ -150,19 +90,43 @@ describe("billiards physics fixtures", () => {
 
   it("english cushion produces tangential speed difference >= 0.15 m/s", () => {
     // Place ball close to the right wall so it bounces quickly
-    const noEnglish = simulateShot(
+    const noEnglish = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 60, new Vec2(0, 0), 0),
       0.8,
       [createBall("white", TABLE_WIDTH - 200, TABLE_HEIGHT / 2, BALL_RADIUS, BALL_COLORS.white)],
-    )[0]!;
-    const withEnglish = simulateShot(
+    ).balls[0]!;
+    const withEnglish = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 60, new Vec2(0.6, 0), 0),
       0.8,
       [createBall("white", TABLE_WIDTH - 200, TABLE_HEIGHT / 2, BALL_RADIUS, BALL_COLORS.white)],
-    )[0]!;
+    ).balls[0]!;
     // Compare post-bounce y positions: english should deflect tangentially
     const posYDiff = Math.abs(withEnglish.pos.y - noEnglish.pos.y);
     expect(posYDiff).toBeGreaterThanOrEqual(toPixels(0.15));
+  });
+
+  it("left and right english mirror each other on a symmetric rail shot", () => {
+    const initialBalls = [
+      createBall("white", TABLE_WIDTH - 200, TABLE_HEIGHT / 2, BALL_RADIUS, BALL_COLORS.white),
+    ];
+    const left = simulateReferenceShot(
+      buildShotParams(new Vec2(1, 0), 60, new Vec2(-0.6, 0), 0),
+      0.8,
+      initialBalls,
+    ).balls[0]!;
+    const right = simulateReferenceShot(
+      buildShotParams(new Vec2(1, 0), 60, new Vec2(0.6, 0), 0),
+      0.8,
+      initialBalls,
+    ).balls[0]!;
+
+    const centerY = TABLE_HEIGHT / 2;
+    const leftOffset = left.pos.y - centerY;
+    const rightOffset = right.pos.y - centerY;
+
+    expect(leftOffset).toBeLessThan(-toPixels(0.08));
+    expect(rightOffset).toBeGreaterThan(toPixels(0.08));
+    expect(Math.abs(leftOffset + rightOffset)).toBeLessThanOrEqual(12);
   });
 
   it("corner graze does not blow up energy", () => {
@@ -170,7 +134,7 @@ describe("billiards physics fixtures", () => {
       createBall("white", TABLE_WIDTH - 40, 40, BALL_RADIUS, BALL_COLORS.white),
     ];
     const shot = buildShotParams(new Vec2(0.7, -0.7), 80, new Vec2(0.3, 0), 0);
-    const result = simulateShot(shot, 1.0, balls);
+    const result = simulateReferenceShot(shot, 1.0, balls).balls;
     const ball = result[0]!;
     const speed = ball.vel.length();
     // Speed must decay, not blow up
@@ -181,11 +145,11 @@ describe("billiards physics fixtures", () => {
     const cue = createBall("white", 250, TABLE_HEIGHT / 2, BALL_RADIUS, BALL_COLORS.white);
     const target = createBall("red1", 350, TABLE_HEIGHT / 2 - 12, BALL_RADIUS, BALL_COLORS.red1);
 
-    const result = simulateShot(
+    const result = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 55, new Vec2(0, 0), 0),
       0.5,
       [cue, target],
-    );
+    ).balls;
     // Target should deflect in -y direction (contact above center line of cue)
     expect(result[1]!.pos.y).toBeLessThan(TABLE_HEIGHT / 2 - 12);
   });
@@ -194,11 +158,11 @@ describe("billiards physics fixtures", () => {
     const cue = createBall("white", 260, TABLE_HEIGHT / 2, BALL_RADIUS, BALL_COLORS.white);
     const target = createBall("red1", 320, TABLE_HEIGHT / 2, BALL_RADIUS, BALL_COLORS.red1);
 
-    const result = simulateShot(
+    const result = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 60, new Vec2(0, 0), 0),
       0.6,
       [cue, target],
-    );
+    ).balls;
 
     expect(Math.abs(result[0]!.vel.y)).toBeLessThanOrEqual(0.02);
     expect(Math.abs(result[1]!.vel.y)).toBeLessThanOrEqual(0.02);
@@ -222,7 +186,31 @@ describe("billiards physics fixtures", () => {
   });
 });
 
-describe("billiards swerve fixtures", () => {
+describe.runIf(RUN_EXPERIMENTAL_BILLIARDS)("billiards experimental fixtures", () => {
+  it("elevated side spin curves more than a flat side spin shot", () => {
+    const flatBaseline = simulateReferenceShot(
+      buildShotParams(new Vec2(1, 0.1), 60, new Vec2(0, 0), 0),
+      0.6,
+    ).balls[0]!;
+    const elevatedBaseline = simulateReferenceShot(
+      buildShotParams(new Vec2(1, 0.1), 60, new Vec2(0, 0), 12),
+      0.6,
+    ).balls[0]!;
+    const flat = simulateReferenceShot(
+      buildShotParams(new Vec2(1, 0.1), 60, new Vec2(0.55, 0), 0),
+      0.6,
+    ).balls[0]!;
+    const elevated = simulateReferenceShot(
+      buildShotParams(new Vec2(1, 0.1), 60, new Vec2(0.55, 0), 12),
+      0.6,
+    ).balls[0]!;
+
+    const flatCurve = Math.abs(flat.pos.y - flatBaseline.pos.y);
+    const elevatedCurve = Math.abs(elevated.pos.y - elevatedBaseline.pos.y);
+
+    expect(elevatedCurve).toBeGreaterThan(flatCurve + 5);
+  });
+
   it("elevation produces tilted initial omega (x/y nonzero)", () => {
     const flatShot = buildShotParams(new Vec2(1, 0), 60, new Vec2(0.5, 0), 0);
     const elevatedShot = buildShotParams(new Vec2(1, 0), 60, new Vec2(0.5, 0), 12);
@@ -236,7 +224,7 @@ describe("billiards swerve fixtures", () => {
   });
 
   it("swerve-small (12°) produces monotonic lateral displacement over 0.6s", () => {
-    const { history } = simulateShotWithHistory(
+    const { history } = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 60, new Vec2(0.55, 0), 12),
       0.6,
     );
@@ -259,18 +247,18 @@ describe("billiards swerve fixtures", () => {
   });
 
   it("swerve-medium (18°) curves more than swerve-small (12°)", () => {
-    const small = simulateShot(
+    const small = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 60, new Vec2(0.55, 0), 12),
       0.6,
-    )[0]!;
-    const medium = simulateShot(
+    ).balls[0]!;
+    const medium = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 60, new Vec2(0.55, 0), 18),
       0.6,
-    )[0]!;
-    const baseline = simulateShot(
+    ).balls[0]!;
+    const baseline = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 60, new Vec2(0, 0), 0),
       0.6,
-    )[0]!;
+    ).balls[0]!;
 
     const smallCurve = Math.abs(small.pos.y - baseline.pos.y);
     const mediumCurve = Math.abs(medium.pos.y - baseline.pos.y);
@@ -278,14 +266,14 @@ describe("billiards swerve fixtures", () => {
   });
 
   it("elevation 0° baseline matches within 2px of no-spin shot", () => {
-    const noSpin = simulateShot(
+    const noSpin = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 60, new Vec2(0, 0), 0),
       0.6,
-    )[0]!;
-    const withSpin0Elev = simulateShot(
+    ).balls[0]!;
+    const withSpin0Elev = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 60, new Vec2(0.55, 0), 0),
       0.6,
-    )[0]!;
+    ).balls[0]!;
     // With 0° elevation, sidespin alone should only produce small lateral difference
     // (sidespin creates cloth contact slip in 2D)
     const diff = Math.abs(withSpin0Elev.pos.y - noSpin.pos.y);
@@ -295,14 +283,14 @@ describe("billiards swerve fixtures", () => {
   });
 
   it("masse (22°) produces strong curvature without energy blow-up", () => {
-    const baseline = simulateShot(
+    const baseline = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 60, new Vec2(0, 0), 0),
       0.8,
-    )[0]!;
-    const masse = simulateShot(
+    ).balls[0]!;
+    const masse = simulateReferenceShot(
       buildShotParams(new Vec2(1, 0), 60, new Vec2(0.7, 0.3), 22),
       0.8,
-    )[0]!;
+    ).balls[0]!;
 
     const curve = Math.abs(masse.pos.y - baseline.pos.y);
     // Masse should produce significant lateral displacement

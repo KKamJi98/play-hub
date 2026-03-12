@@ -14,14 +14,19 @@ import { useDisplaySettings } from "../../hooks/useDisplaySettings";
 
 // ---- Shot presets ----------------------------------------------------------
 
-const SHOT_PRESETS: { label: string; tip: [number, number]; elev: number }[] = [
+const SHOT_PRESETS: {
+  label: string;
+  tip: [number, number];
+  elev: number;
+  experimental?: boolean;
+}[] = [
   { label: "Center", tip: [0, 0], elev: 0 },
   { label: "Follow", tip: [0, -0.6], elev: 0 },
   { label: "Draw", tip: [0, 0.6], elev: 0 },
   { label: "Left", tip: [-0.5, 0], elev: 0 },
   { label: "Right", tip: [0.5, 0], elev: 0 },
-  { label: "Swerve", tip: [0.5, 0], elev: 12 },
-  { label: "Masse", tip: [0.7, 0.3], elev: 22 },
+  { label: "Swerve", tip: [0.5, 0], elev: 12, experimental: true },
+  { label: "Masse", tip: [0.7, 0.3], elev: 22, experimental: true },
 ];
 
 // ---- Mode options ----------------------------------------------------------
@@ -723,12 +728,21 @@ export default function BilliardsPage() {
                                   setAimSpin(new Vec2(preset.tip[0], preset.tip[1]));
                                   setAimElevationDeg(preset.elev);
                                 }}
-                                className="touch-manipulation rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-[#c2d3ea] transition hover:bg-white/10 active:scale-95"
+                                className="touch-manipulation inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-[#c2d3ea] transition hover:bg-white/10 active:scale-95"
                               >
                                 {preset.label}
+                                {preset.experimental && (
+                                  <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-200">
+                                    Experimental
+                                  </span>
+                                )}
                               </button>
                             ))}
                           </div>
+                          <p className="mt-2 text-[11px] leading-5 text-[#8892a4]">
+                            `Center`, `Follow`, `Draw`, `Left`, `Right` preset은 현재 calibrated basic
+                            strokes 범위입니다. `Swerve`, `Masse`는 실험용 preset으로 유지됩니다.
+                          </p>
                         </div>
                         <AdvancedSlider
                           label="Cue Elevation"

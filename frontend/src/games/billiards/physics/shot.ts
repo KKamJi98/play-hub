@@ -10,7 +10,8 @@ import {
   MIN_SHOT_VELOCITY,
   R,
   TIP_OFFSET_LIMIT,
-  TIP_SPIN_EFFICIENCY,
+  TIP_SIDE_SPIN_EFFICIENCY,
+  TIP_VERTICAL_SPIN_EFFICIENCY,
 } from "../constants";
 import type { BallId } from "../constants";
 
@@ -19,6 +20,7 @@ const BALL_INERTIA = (2 / 5) * M * R * R;
 export interface ShotParamsV2 {
   direction: { x: number; y: number };
   speedMps: number;
+  /** Cue-ball face offset where x is left/right and y is top(-)/bottom(+) */
   tipOffset: { x: number; y: number };
   elevationDeg: number;
 }
@@ -85,11 +87,11 @@ export function createShotMotion(shot: ShotParamsV2): { vel: Vec2; omega: Omega3
   const right3 = vec3(dir.y, -dir.x, 0);
 
   const tipVector = {
-    x: right3.x * tip.x * R,
-    y: right3.y * tip.x * R,
-    z: -tip.y * R,
+    x: right3.x * tip.x * R * TIP_SIDE_SPIN_EFFICIENCY,
+    y: right3.y * tip.x * R * TIP_SIDE_SPIN_EFFICIENCY,
+    z: -tip.y * R * TIP_VERTICAL_SPIN_EFFICIENCY,
   };
-  const impulse = scale3(forward3, M * shot.speedMps * TIP_SPIN_EFFICIENCY);
+  const impulse = scale3(forward3, M * shot.speedMps);
   const omegaVector = clampMagnitude3(
     scale3(cross3(tipVector, impulse), 1 / BALL_INERTIA),
     MAX_SHOT_OMEGA,
