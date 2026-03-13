@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useStompClient } from "./useStompClient";
 
-export type OnlinePhase = "nickname" | "lobby" | "waiting" | "playing" | "finished";
+export type OnlinePhase = "nickname" | "lobby" | "queuing" | "waiting" | "playing" | "finished";
 
 export interface OnlinePlayer {
   sessionId: string;
@@ -27,6 +27,8 @@ export interface OnlineGameState {
   gameState: unknown;
   gameResult: { isOver: boolean; winner: number | null; reason: string | null } | null;
   opponentLeft: boolean;
+  isQuickMatch: boolean;
+  queueSize: number | null;
 }
 
 export interface UseOnlineGameOptions {
@@ -49,6 +51,8 @@ export function useOnlineGame(gameId: string, options?: UseOnlineGameOptions) {
     gameState: null,
     gameResult: null,
     opponentLeft: false,
+    isQuickMatch: false,
+    queueSize: null,
   });
 
   const onGameStartedRef = useRef(options?.onGameStarted);
@@ -56,6 +60,8 @@ export function useOnlineGame(gameId: string, options?: UseOnlineGameOptions) {
 
   const unsubRoomRef = useRef<(() => void) | null>(null);
   const unsubGameRef = useRef<(() => void) | null>(null);
+  const unsubMatchRef = useRef<(() => void) | null>(null);
+  const unsubQueueSizeRef = useRef<(() => void) | null>(null);
 
   const safePublish = useCallback(
     (destination: string, body: unknown) => {
@@ -196,6 +202,99 @@ export function useOnlineGame(gameId: string, options?: UseOnlineGameOptions) {
     [state.nickname, subscribeToRoom, safePublish],
   );
 
+  const joinQueue = useCallback(() => {
+    const ticketId = crypto.randomUUID();
+
+    setState((s) => ({
+      ...s,
+      phase: "queuing",
+      isQuickMatch: true,
+      queueSize: null,
+    }));
+
+    // Subscribe to match result
+    unsubMatchRef.current?.();
+    unsubMatchRef.current = subscribe(
+      `/topic/matchmaking/result/${ticketId}`,
+      (msg) => {
+        const data = JSON.parse(msg.body);
+        if (data.type === "MATCHED") {
+          // Clean up matchmaking subscriptions
+          unsubMatchRef.current?.();
+          unsubMatchRef.current = null;
+          unsubQueueSizeRef.current?.();
+          unsubQueueSizeRef.current = null;
+
+          // Subscribe to room/game topics
+          subscribeToRoom(data.roomId);
+
+          setState((s) => ({
+            ...s,
+            phase: "playing",
+            roomId: data.roomId,
+            playerSessionId: data.sessionId,
+            playerIndex: data.playerIndex,
+            players: data.players ?? [],
+            isHost: data.playerIndex === 0,
+            gameState: data.initialState ?? null,
+            queueSize: null,
+          }));
+
+          // Register WS session for disconnect cleanup
+          safePublish("/app/room/join", {
+            roomId: data.roomId,
+            sessionId: data.sessionId,
+          });
+
+          onGameStartedRef.current?.();
+        } else if (data.type === "QUEUE_TIMEOUT") {
+          unsubMatchRef.current?.();
+          unsubMatchRef.current = null;
+          unsubQueueSizeRef.current?.();
+          unsubQueueSizeRef.current = null;
+
+          setState((s) => ({
+            ...s,
+            phase: "lobby",
+            isQuickMatch: false,
+            queueSize: null,
+          }));
+        }
+      },
+    );
+
+    // Subscribe to queue size updates
+    unsubQueueSizeRef.current?.();
+    unsubQueueSizeRef.current = subscribe(
+      `/topic/matchmaking/queue/${gameId}`,
+      (msg) => {
+        const data = JSON.parse(msg.body);
+        setState((s) => ({ ...s, queueSize: data.queueSize ?? s.queueSize }));
+      },
+    );
+
+    // Send join queue message
+    safePublish("/app/matchmaking/join", {
+      gameId,
+      nickname: state.nickname,
+      matchTicketId: ticketId,
+    });
+  }, [gameId, state.nickname, subscribe, subscribeToRoom, safePublish]);
+
+  const cancelQueue = useCallback(() => {
+    safePublish("/app/matchmaking/cancel", {});
+    unsubMatchRef.current?.();
+    unsubMatchRef.current = null;
+    unsubQueueSizeRef.current?.();
+    unsubQueueSizeRef.current = null;
+    setState((s) => ({
+      ...s,
+      phase: "lobby",
+      isQuickMatch: false,
+      queueSize: null,
+    }));
+  }, [safePublish]);
+
   const startGame = useCallback(() => {
     if (!state.roomId) return;
     safePublish("/app/room/start", { roomId: state.roomId });
@@ -230,6 +329,7 @@ export function useOnlineGame(gameId: string, options?: UseOnlineGameOptions) {
       gameState: null,
       gameResult: null,
       opponentLeft: false,
+      isQuickMatch: false,
     }));
   }, [state.roomId, state.playerSessionId, safePublish]);
 
@@ -238,6 +338,8 @@ export function useOnlineGame(gameId: string, options?: UseOnlineGameOptions) {
     return () => {
       unsubRoomRef.current?.();
       unsubGameRef.current?.();
+      unsubMatchRef.current?.();
+      unsubQueueSizeRef.current?.();
     };
   }, []);
 
@@ -248,6 +350,8 @@ export function useOnlineGame(gameId: string, options?: UseOnlineGameOptions) {
     confirmNickname,
     createRoom,
     joinRoom,
+    joinQueue,
+    cancelQueue,
     startGame,
     sendAction,
     leaveRoom,

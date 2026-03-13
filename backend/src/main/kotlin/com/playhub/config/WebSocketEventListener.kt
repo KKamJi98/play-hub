@@ -1,5 +1,6 @@
 package com.playhub.config
 
+import com.playhub.matchmaking.MatchmakingService
 import com.playhub.room.RoomService
 import org.slf4j.LoggerFactory
 import org.springframework.context.event.EventListener
@@ -10,6 +11,7 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent
 @Component
 class WebSocketEventListener(
     private val roomService: RoomService,
+    private val matchmakingService: MatchmakingService,
     private val messagingTemplate: SimpMessagingTemplate
 ) {
 
@@ -40,5 +42,8 @@ class WebSocketEventListener(
                 )
             )
         }
+
+        // Also remove from matchmaking queue if waiting
+        matchmakingService.dequeue(wsSessionId)
     }
 }

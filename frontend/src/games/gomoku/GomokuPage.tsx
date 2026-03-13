@@ -171,10 +171,12 @@ function GameOverModal({
   winner,
   mode,
   onReset,
+  onQuickRematch,
 }: {
   winner: 0 | 1 | 2;
   mode: GameMode;
   onReset: () => void;
+  onQuickRematch?: () => void;
 }) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -230,16 +232,30 @@ function GameOverModal({
           <p className="mt-2 text-sm text-[#8892a4]">{subtitle}</p>
         </div>
 
-        <button
-          onClick={onReset}
-          className="px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider
-                     bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
-                     text-[#0a0e1a] shadow-lg shadow-cyan-500/25
-                     hover:shadow-cyan-500/50 hover:scale-105
-                     transition-all duration-300 active:scale-95"
-        >
-          다시 하기
-        </button>
+        <div className="flex gap-3">
+          {onQuickRematch && (
+            <button
+              onClick={onQuickRematch}
+              className="px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider
+                         bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
+                         text-[#0a0e1a] shadow-lg shadow-cyan-500/25
+                         hover:shadow-cyan-500/50 hover:scale-105
+                         transition-all duration-300 active:scale-95"
+            >
+              빠른 재매치
+            </button>
+          )}
+          <button
+            onClick={onReset}
+            className={`px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider transition-all duration-300 active:scale-95
+                       ${onQuickRematch
+                         ? `border ${isDark ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]" : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"}`
+                         : "bg-gradient-to-r from-[#00f0ff] to-[#0080ff] text-[#0a0e1a] shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/50 hover:scale-105"
+                       }`}
+          >
+            {onQuickRematch ? "나가기" : "다시 하기"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -285,6 +301,8 @@ export default function GomokuPage() {
                   onConfirmNickname={online.confirmNickname}
                   onCreateRoom={online.createRoom}
                   onJoinRoom={online.joinRoom}
+                  onJoinQueue={online.joinQueue}
+                  onCancelQueue={online.cancelQueue}
                   onStartGame={() => { online.startGame(); startGame(); }}
                   onLeaveRoom={online.leaveRoom}
                 />
@@ -463,7 +481,12 @@ export default function GomokuPage() {
 
         {/* Game Over Modal */}
         {displayGameStatus === "finished" && (
-          <GameOverModal winner={displayWinner} mode={state.mode} onReset={handleReset} />
+          <GameOverModal
+            winner={displayWinner}
+            mode={state.mode}
+            onReset={handleReset}
+            onQuickRematch={online.state.isQuickMatch ? () => { handleReset(); online.joinQueue(); } : undefined}
+          />
         )}
 
         {/* Opponent left overlay */}
@@ -481,16 +504,30 @@ export default function GomokuPage() {
                 <h2 className="font-display text-2xl font-bold tracking-wider">상대가 나갔습니다</h2>
                 <p className="mt-2 text-sm text-[#8892a4]">상대 플레이어가 게임을 떠났습니다.</p>
               </div>
-              <button
-                onClick={handleReset}
-                className="touch-manipulation px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider
-                           bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
-                           text-[#0a0e1a] shadow-lg shadow-cyan-500/25
-                           hover:shadow-cyan-500/50 hover:scale-105
-                           transition-all duration-300 active:scale-95"
-              >
-                나가기
-              </button>
+              <div className="flex gap-3">
+                {online.state.isQuickMatch && (
+                  <button
+                    onClick={() => { handleReset(); online.joinQueue(); }}
+                    className="touch-manipulation px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider
+                               bg-gradient-to-r from-[#00f0ff] to-[#0080ff]
+                               text-[#0a0e1a] shadow-lg shadow-cyan-500/25
+                               hover:shadow-cyan-500/50 hover:scale-105
+                               transition-all duration-300 active:scale-95"
+                  >
+                    빠른 재매치
+                  </button>
+                )}
+                <button
+                  onClick={handleReset}
+                  className={`touch-manipulation px-6 py-2.5 rounded-xl font-display font-semibold tracking-wider transition-all duration-300 active:scale-95
+                             ${online.state.isQuickMatch
+                               ? `border ${isDark ? "border-white/10 bg-white/5 hover:bg-white/10 text-[#8892a4]" : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600"}`
+                               : "bg-gradient-to-r from-[#00f0ff] to-[#0080ff] text-[#0a0e1a] shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/50 hover:scale-105"
+                             }`}
+                >
+                  나가기
+                </button>
+              </div>
             </div>
           </div>
         )}

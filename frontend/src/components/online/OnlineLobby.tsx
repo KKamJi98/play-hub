@@ -11,6 +11,8 @@ interface OnlineLobbyProps {
   onConfirmNickname: () => void;
   onCreateRoom: () => void;
   onJoinRoom: (roomId: string) => void;
+  onJoinQueue: () => void;
+  onCancelQueue: () => void;
   onStartGame: () => void;
   onLeaveRoom: () => void;
 }
@@ -24,6 +26,8 @@ export default function OnlineLobby({
   onConfirmNickname,
   onCreateRoom,
   onJoinRoom,
+  onJoinQueue,
+  onCancelQueue,
   onStartGame,
   onLeaveRoom,
 }: OnlineLobbyProps) {
@@ -101,7 +105,21 @@ export default function OnlineLobby({
         )}
 
         <div className="flex flex-col gap-4 w-full">
-          <button onClick={onCreateRoom} disabled={!connected} className={btnPrimary}>
+          <button onClick={onJoinQueue} disabled={!connected} className={btnPrimary}>
+            빠른 매치
+          </button>
+
+          <div className="flex items-center gap-2">
+            <div
+              className={`flex-1 h-px ${isDark ? "bg-white/10" : "bg-gray-200"}`}
+            />
+            <span className="text-xs text-[#8892a4]">또는</span>
+            <div
+              className={`flex-1 h-px ${isDark ? "bg-white/10" : "bg-gray-200"}`}
+            />
+          </div>
+
+          <button onClick={onCreateRoom} disabled={!connected} className={btnSecondary}>
             방 만들기
           </button>
 
@@ -133,6 +151,39 @@ export default function OnlineLobby({
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Phase: Queuing (Quick Match)
+  if (state.phase === "queuing") {
+    return (
+      <div className="flex flex-col items-center gap-6 py-8 px-4 max-w-sm mx-auto">
+        <h2 className="font-display text-2xl font-bold tracking-wider">
+          <span className="bg-gradient-to-r from-[#00f0ff] to-[#ffb800] bg-clip-text text-transparent">
+            빠른 매치
+          </span>
+        </h2>
+
+        {/* Spinner */}
+        <div className="relative w-16 h-16">
+          <div className={`absolute inset-0 rounded-full border-2 ${isDark ? "border-[#00f0ff]/20" : "border-blue-200"}`} />
+          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#00f0ff] animate-spin" />
+        </div>
+
+        <p className="text-sm text-[#8892a4] animate-pulse">
+          상대를 찾고 있습니다...
+        </p>
+
+        {state.queueSize !== null && (
+          <p className="text-xs text-[#8892a4]">
+            현재 <span className="font-semibold text-[#00f0ff]">{state.queueSize}</span>명 대기 중
+          </p>
+        )}
+
+        <button onClick={onCancelQueue} className={btnSecondary}>
+          취소
+        </button>
       </div>
     );
   }
