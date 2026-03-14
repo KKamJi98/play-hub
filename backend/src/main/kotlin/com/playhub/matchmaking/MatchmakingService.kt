@@ -1,5 +1,6 @@
 package com.playhub.matchmaking
 
+import com.playhub.config.ActiveSessionRegistry
 import com.playhub.game.GameHandler
 import com.playhub.room.Player
 import com.playhub.room.RoomService
@@ -24,6 +25,7 @@ data class QueueEntry(
 class MatchmakingService(
     private val roomService: RoomService,
     private val messagingTemplate: SimpMessagingTemplate,
+    private val activeSessionRegistry: ActiveSessionRegistry,
     gameHandlers: List<GameHandler<*, *>>
 ) {
 
@@ -79,6 +81,30 @@ class MatchmakingService(
         sessionToEntry.remove(entry1.wsSessionId)
         sessionToEntry.remove(entry2.wsSessionId)
 
+        // Liveness check: verify both players are still connected
+        val alive1 = activeSessionRegistry.isActive(entry1.wsSessionId)
+        val alive2 = activeSessionRegistry.isActive(entry2.wsSessionId)
+
+        if (!alive1 && !alive2) {
+            log.info("Both players disconnected before match: '{}', '{}'", entry1.nickname, entry2.nickname)
+            broadcastQueueSize(gameId)
+            return false
+        }
+        if (!alive1) {
+            log.info("Player '{}' disconnected before match, re-queuing '{}'", entry1.nickname, entry2.nickname)
+            queue.add(entry2)
+            sessionToEntry[entry2.wsSessionId] = entry2
+            broadcastQueueSize(gameId)
+            return false
+        }
+        if (!alive2) {
+            log.info("Player '{}' disconnected before match, re-queuing '{}'", entry2.nickname, entry1.nickname)
+            queue.add(entry1)
+            sessionToEntry[entry1.wsSessionId] = entry1
+            broadcastQueueSize(gameId)
+            return false
+        }
+
         // Create room using existing RoomService
         val room = roomService.createRoom(gameId)
         val player1 = Player(
@@ -93,6 +119,12 @@ class MatchmakingService(
         )
         roomService.joinRoom(room.id, player1)
         roomService.joinRoom(room.id, player2)
+
+        // Register session mapping immediately (before MATCHED message)
+        // This ensures WebSocketEventListener can handle disconnect properly
+        roomService.registerSession(entry1.wsSessionId, room.id, player1.sessionId)
+        roomService.registerSession(entry2.wsSessionId, room.id, player2.sessionId)
+
         roomService.startGame(room.id)
 
         // Create initial game state
