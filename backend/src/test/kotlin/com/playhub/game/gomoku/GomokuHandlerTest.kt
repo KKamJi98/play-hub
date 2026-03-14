@@ -57,6 +57,13 @@ class GomokuHandlerTest {
             assertNull(state.lastMove)
             assertTrue(state.moveHistory.isEmpty())
         }
+
+        @Test
+        fun `should force renju rule on even when legacy false is requested`() {
+            val state = handler.createInitialState(mapOf("renjuRule" to false))
+
+            assertTrue(state.renjuRule)
+        }
     }
 
     @Nested
@@ -407,9 +414,9 @@ class GomokuHandlerTest {
         }
 
         @Test
-        fun `createInitialState with renjuRule false should disable renju and have no forbiddenPositions`() {
+        fun `createInitialState with renjuRule false should still enable renju for legacy clients`() {
             val state = handler.createInitialState(mapOf("renjuRule" to false))
-            assertFalse(state.renjuRule)
+            assertTrue(state.renjuRule)
             assertTrue(state.forbiddenPositions.isEmpty())
         }
 

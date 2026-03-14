@@ -25,16 +25,12 @@ function ModeSelection({
   onSelectMode,
   difficulty,
   onSelectDifficulty,
-  renjuRule,
-  onSetRenjuRule,
   onStart,
 }: {
   selectedMode: GameMode;
   onSelectMode: (mode: GameMode) => void;
   difficulty: Difficulty;
   onSelectDifficulty: (d: Difficulty) => void;
-  renjuRule: boolean;
-  onSetRenjuRule: (enabled: boolean) => void;
   onStart: () => void;
 }) {
   const { theme } = useTheme();
@@ -111,28 +107,21 @@ function ModeSelection({
         </div>
       )}
 
-      {/* Renju Rule toggle (all modes) */}
+      {/* Renju Rule (all modes) */}
       <div className="flex flex-col items-center gap-3">
-        <span className="text-sm font-medium text-[#8892a4]">렌주 룰</span>
-        <div className="flex gap-2">
-          <button
-            onClick={() => onSetRenjuRule(true)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border
-              ${renjuRule ? activeStyle : inactiveStyle}`}
-          >
-            ON
-          </button>
-          <button
-            onClick={() => onSetRenjuRule(false)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border
-              ${!renjuRule ? activeStyle : inactiveStyle}`}
-          >
-            OFF
-          </button>
+        <span className="text-sm font-medium text-[#8892a4]">규칙</span>
+        <div
+          className={`rounded-xl border px-5 py-3 text-center ${
+            isDark
+              ? "border-[#00f0ff]/30 bg-[#00f0ff]/10 text-[#d7fbff]"
+              : "border-blue-200 bg-blue-50 text-blue-800"
+          }`}
+        >
+          <p className="font-semibold tracking-wide">Renju Rule ON</p>
+          <p className={`mt-1 text-xs ${isDark ? "text-[#9defff]" : "text-blue-700"}`}>
+            오목은 항상 렌주 룰이 적용되며, 흑의 금수(장목·사사·삼삼)를 제한합니다.
+          </p>
         </div>
-        <p className="text-xs text-[#8892a4] text-center max-w-xs">
-          흑의 금수(장목·사사·삼삼)를 제한하는 국제 렌주 룰
-        </p>
       </div>
 
       {/* Start button */}
@@ -291,7 +280,7 @@ function GameOverModal({
 }
 
 export default function GomokuPage() {
-  const { state, placeStone, reset, setMode, setDifficulty, startGame, setRenjuRule } = useGomokuGame();
+  const { state, placeStone, reset, setMode, setDifficulty, startGame } = useGomokuGame();
   const online = useOnlineGame("gomoku");
   const { theme } = useTheme();
   const isCoarsePointer = useCoarsePointer();
@@ -328,7 +317,7 @@ export default function GomokuPage() {
                   gameLabel="오목 - 15x15 보드에서 5개를 연속으로 놓으세요"
                   onSetNickname={online.setNickname}
                   onConfirmNickname={online.confirmNickname}
-                  onCreateRoom={() => online.createRoom({ settings: { renjuRule: state.renjuRule } })}
+                  onCreateRoom={() => online.createRoom()}
                   onJoinRoom={online.joinRoom}
                   onJoinQueue={online.joinQueue}
                   onCancelQueue={online.cancelQueue}
@@ -342,8 +331,6 @@ export default function GomokuPage() {
                 onSelectMode={setMode}
                 difficulty={state.difficulty}
                 onSelectDifficulty={setDifficulty}
-                renjuRule={state.renjuRule}
-                onSetRenjuRule={setRenjuRule}
                 onStart={startGame}
               />
             )}
@@ -362,8 +349,6 @@ export default function GomokuPage() {
             onSelectMode={setMode}
             difficulty={state.difficulty}
             onSelectDifficulty={setDifficulty}
-            renjuRule={state.renjuRule}
-            onSetRenjuRule={setRenjuRule}
             onStart={state.mode === "online" ? () => {} : startGame}
           />
         </div>

@@ -12,7 +12,8 @@ class GomokuHandler : GameHandler<GomokuState, Any> {
 
     override fun createInitialState(settings: Map<String, Any>): GomokuState {
         val board = Array(GomokuState.BOARD_SIZE) { IntArray(GomokuState.BOARD_SIZE) }
-        val renjuRule = settings["renjuRule"] as? Boolean ?: true
+        // Server policy: Gomoku always runs with Renju enabled.
+        val renjuRule = true
         val forbiddenPositions = if (renjuRule) {
             RenjuValidator.getAllForbiddenPositions(board).map { (r, c) -> mapOf("row" to r, "col" to c) }
         } else {

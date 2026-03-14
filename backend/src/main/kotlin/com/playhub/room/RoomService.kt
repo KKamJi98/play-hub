@@ -7,6 +7,10 @@ import java.util.concurrent.ConcurrentHashMap
 @Service
 class RoomService {
 
+    companion object {
+        private const val GOMOKU_GAME_ID = "gomoku"
+    }
+
     private val rooms = ConcurrentHashMap<String, Room>()
 
     // WebSocket sessionId → (roomId, playerSessionId)
@@ -26,7 +30,7 @@ class RoomService {
         val room = Room(
             id = UUID.randomUUID().toString().substring(0, 8),
             gameId = gameId,
-            settings = settings.toMutableMap()
+            settings = normalizeSettings(gameId, settings)
         )
         rooms[room.id] = room
         return room
@@ -60,4 +64,12 @@ class RoomService {
 
     fun getRoomsByGame(gameId: String): List<Room> =
         rooms.values.filter { it.gameId == gameId }
+
+    private fun normalizeSettings(gameId: String, settings: Map<String, Any>): MutableMap<String, Any> {
+        val normalized = settings.toMutableMap()
+        if (gameId == GOMOKU_GAME_ID) {
+            normalized["renjuRule"] = true
+        }
+        return normalized
+    }
 }

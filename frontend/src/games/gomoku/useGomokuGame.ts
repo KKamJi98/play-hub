@@ -114,8 +114,7 @@ type Action =
   | { type: "SET_DIFFICULTY"; difficulty: Difficulty }
   | { type: "SET_WINNER"; winner: 0 | 1 | 2; winningLine: { row: number; col: number }[] | null }
   | { type: "START_GAME" }
-  | { type: "SET_AI_THINKING"; thinking: boolean }
-  | { type: "SET_RENJU_RULE"; enabled: boolean };
+  | { type: "SET_AI_THINKING"; thinking: boolean };
 
 function computeForbiddenPositions(board: Stone[][], nextPlayer: Player, renjuRule: boolean): Set<string> {
   return renjuRule && nextPlayer === BLACK
@@ -229,15 +228,10 @@ function reducer(state: GomokuState, action: Action): GomokuState {
     }
 
     case "RESET":
-      return {
-        ...createInitialState(state.mode, state.difficulty),
-        renjuRule: state.renjuRule,
-        gameStatus: "waiting",
-        forbiddenPositions: new Set<string>(),
-      };
+      return createInitialState(state.mode, state.difficulty);
 
     case "SET_MODE":
-      return { ...createInitialState(action.mode, state.difficulty), renjuRule: state.renjuRule };
+      return createInitialState(action.mode, state.difficulty);
 
     case "SET_DIFFICULTY":
       return { ...state, difficulty: action.difficulty };
@@ -263,14 +257,6 @@ function reducer(state: GomokuState, action: Action): GomokuState {
 
     case "SET_AI_THINKING":
       return { ...state, aiThinking: action.thinking };
-
-    case "SET_RENJU_RULE":
-      return {
-        ...createInitialState(state.mode, state.difficulty),
-        renjuRule: action.enabled,
-        gameStatus: "waiting",
-        forbiddenPositions: new Set<string>(),
-      };
 
     default:
       return state;
@@ -346,10 +332,6 @@ export function useGomokuGame() {
     dispatch({ type: "START_GAME" });
   }, []);
 
-  const setRenjuRule = useCallback((enabled: boolean) => {
-    dispatch({ type: "SET_RENJU_RULE", enabled });
-  }, []);
-
   return {
     state,
     placeStone,
@@ -357,6 +339,5 @@ export function useGomokuGame() {
     setMode,
     setDifficulty,
     startGame,
-    setRenjuRule,
   };
 }
