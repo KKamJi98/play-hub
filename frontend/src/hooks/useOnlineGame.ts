@@ -136,11 +136,11 @@ export function useOnlineGame(gameId: string, options?: UseOnlineGameOptions) {
     [subscribe],
   );
 
-  const createRoom = useCallback(async () => {
+  const createRoom = useCallback(async (options?: { settings?: Record<string, unknown> }) => {
     const res = await fetch("/api/rooms", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ gameId }),
+      body: JSON.stringify({ gameId, settings: options?.settings ?? {} }),
     });
     const room: RoomResponse = await res.json();
 

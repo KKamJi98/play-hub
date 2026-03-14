@@ -7,6 +7,7 @@ import {
   type Difficulty,
 } from "../constants";
 import { evaluate, hasFive } from "./evaluate";
+import { isForbiddenMove } from "../renjuValidator";
 
 interface Move {
   row: number;
@@ -94,6 +95,8 @@ function quickMoveScore(board: Stone[][], row: number, col: number, player: Play
   return score;
 }
 
+const BLACK = 1 as const;
+
 function minimax(
   board: Stone[][],
   depth: number,
@@ -103,6 +106,7 @@ function minimax(
   aiPlayer: Player,
   startTime: number,
   stats: { nodesSearched: number },
+  renjuRule: boolean,
 ): number {
   stats.nodesSearched++;
 
@@ -116,9 +120,15 @@ function minimax(
   }
 
   const currentPlayer = isMaximizing ? aiPlayer : opponent;
-  const candidates = getCandidateMoves(board);
+  let candidates = getCandidateMoves(board);
 
   if (candidates.length === 0) return 0; // Draw
+
+  // Renju rule: filter forbidden moves for BLACK
+  if (renjuRule && currentPlayer === BLACK) {
+    candidates = candidates.filter((m) => !isForbiddenMove(board, m.row, m.col));
+    if (candidates.length === 0) return -1_000_000 - depth; // BLACK has no valid moves
+  }
 
   // Move ordering: sort candidates by quick heuristic
   candidates.sort(
@@ -131,7 +141,7 @@ function minimax(
     let maxEval = -Infinity;
     for (const { row, col } of candidates) {
       board[row]![col] = currentPlayer;
-      const evalScore = minimax(board, depth - 1, alpha, beta, false, aiPlayer, startTime, stats);
+      const evalScore = minimax(board, depth - 1, alpha, beta, false, aiPlayer, startTime, stats, renjuRule);
       board[row]![col] = EMPTY;
 
       maxEval = Math.max(maxEval, evalScore);
@@ -143,7 +153,7 @@ function minimax(
     let minEval = Infinity;
     for (const { row, col } of candidates) {
       board[row]![col] = currentPlayer;
-      const evalScore = minimax(board, depth - 1, alpha, beta, true, aiPlayer, startTime, stats);
+      const evalScore = minimax(board, depth - 1, alpha, beta, true, aiPlayer, startTime, stats, renjuRule);
       board[row]![col] = EMPTY;
 
       minEval = Math.min(minEval, evalScore);
@@ -161,6 +171,7 @@ export function findBestMove(
   boardInput: Stone[][],
   difficulty: Difficulty,
   aiPlayer: Player,
+  renjuRule: boolean = false,
 ): AIResult {
   const startTime = Date.now();
   const stats = { nodesSearched: 0 };
@@ -169,7 +180,12 @@ export function findBestMove(
   // Clone board to avoid mutating the input
   const board: Stone[][] = boardInput.map((row) => [...row]);
 
-  const candidates = getCandidateMoves(board);
+  let candidates = getCandidateMoves(board);
+
+  // Renju: filter forbidden moves for BLACK at root level too
+  if (renjuRule && aiPlayer === BLACK) {
+    candidates = candidates.filter((m) => !isForbiddenMove(board, m.row, m.col));
+  }
 
   // Move ordering for root
   candidates.sort(
@@ -178,12 +194,21 @@ export function findBestMove(
       quickMoveScore(board, a.row, a.col, aiPlayer),
   );
 
+  if (candidates.length === 0) {
+    // Fallback: return center or first empty cell
+    const center = Math.floor(BOARD_SIZE / 2);
+    return {
+      move: { row: center, col: center },
+      stats: { nodesSearched: 0, timeMs: 0 },
+    };
+  }
+
   let bestMove = candidates[0]!;
   let bestScore = -Infinity;
 
   for (const { row, col } of candidates) {
     board[row]![col] = aiPlayer;
-    const score = minimax(board, depth - 1, -Infinity, Infinity, false, aiPlayer, startTime, stats);
+    const score = minimax(board, depth - 1, -Infinity, Infinity, false, aiPlayer, startTime, stats, renjuRule);
     board[row]![col] = EMPTY;
 
     if (score > bestScore) {

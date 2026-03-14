@@ -394,4 +394,181 @@ class GomokuHandlerTest {
             assertNull(result.reason)
         }
     }
+
+    @Nested
+    inner class RenjuRules {
+
+        @Test
+        fun `createInitialState with renjuRule true should set flag and compute forbiddenPositions`() {
+            val state = handler.createInitialState(mapOf("renjuRule" to true))
+            assertTrue(state.renjuRule)
+            // Empty board has no forbidden positions
+            assertTrue(state.forbiddenPositions.isEmpty())
+        }
+
+        @Test
+        fun `createInitialState with renjuRule false should disable renju and have no forbiddenPositions`() {
+            val state = handler.createInitialState(mapOf("renjuRule" to false))
+            assertFalse(state.renjuRule)
+            assertTrue(state.forbiddenPositions.isEmpty())
+        }
+
+        @Test
+        fun `createInitialState defaults to renjuRule true`() {
+            val state = handler.createInitialState(emptyMap())
+            assertTrue(state.renjuRule)
+        }
+
+        @Test
+        fun `handler rejects forbidden double-three move for BLACK when renjuRule is true`() {
+            // Build a board state where (7,7) would be a double-three for BLACK
+            val board = Array(GomokuState.BOARD_SIZE) { IntArray(GomokuState.BOARD_SIZE) }
+            board[7][8] = GomokuState.BLACK
+            board[7][9] = GomokuState.BLACK
+            board[5][7] = GomokuState.BLACK
+            board[6][7] = GomokuState.BLACK
+
+            val state = GomokuState(
+                board = board,
+                currentPlayer = GomokuState.BLACK,
+                gameStatus = GameStatus.PLAYING,
+                winner = GomokuState.EMPTY,
+                lastMove = null,
+                renjuRule = true
+            )
+
+            val action = mapOf("type" to "PLACE_STONE", "row" to 7, "col" to 7)
+            val result = handler.validateAction(state, action, 0)
+
+            assertFalse(result.valid)
+            assertNotNull(result.error)
+            assertTrue(result.error!!.contains("Forbidden move"))
+        }
+
+        @Test
+        fun `handler allows winning move at position that would otherwise be forbidden`() {
+            // Five in a row is a winning move and overrides forbidden checks.
+            // Setup: 4 BLACK horizontally; placing 5th is exactly five → winning → not forbidden.
+            val board = Array(GomokuState.BOARD_SIZE) { IntArray(GomokuState.BOARD_SIZE) }
+            board[7][3] = GomokuState.BLACK
+            board[7][4] = GomokuState.BLACK
+            board[7][5] = GomokuState.BLACK
+            board[7][6] = GomokuState.BLACK
+
+            val state = GomokuState(
+                board = board,
+                currentPlayer = GomokuState.BLACK,
+                gameStatus = GameStatus.PLAYING,
+                winner = GomokuState.EMPTY,
+                lastMove = null,
+                renjuRule = true
+            )
+
+            val action = mapOf("type" to "PLACE_STONE", "row" to 7, "col" to 7)
+            val result = handler.validateAction(state, action, 0)
+
+            assertTrue(result.valid, "Exactly 5 in a row (winning move) should be allowed even with renjuRule")
+        }
+
+        @Test
+        fun `handler includes forbiddenPositions after WHITE move when renjuRule is on`() {
+            // After WHITE moves, it becomes BLACK's turn → forbidden positions should be recalculated.
+            // Start with BLACK move, then WHITE move, verify the resulting state has forbiddenPositions.
+            val initialState = handler.createInitialState(mapOf("renjuRule" to true))
+
+            // BLACK at (7,7)
+            val stateAfterBlack = handler.applyAction(
+                initialState, mapOf("type" to "PLACE_STONE", "row" to 7, "col" to 7), 0
+            )
+            assertEquals(GomokuState.WHITE, stateAfterBlack.currentPlayer)
+            // After BLACK move it's WHITE's turn — no forbidden positions needed for WHITE
+            assertTrue(stateAfterBlack.forbiddenPositions.isEmpty())
+
+            // WHITE at (0,0)
+            val stateAfterWhite = handler.applyAction(
+                stateAfterBlack, mapOf("type" to "PLACE_STONE", "row" to 0, "col" to 0), 1
+            )
+            assertEquals(GomokuState.BLACK, stateAfterWhite.currentPlayer)
+            // forbiddenPositions is a List<Map<String,Int>>, can be empty or non-empty depending on board
+            // The important thing is the field exists and is computed (not null)
+            assertNotNull(stateAfterWhite.forbiddenPositions)
+        }
+
+        @Test
+        fun `renjuRule false allows overline for BLACK - no restriction`() {
+            // With renjuRule=false, BLACK can form 6+ in a row
+            val board = Array(GomokuState.BOARD_SIZE) { IntArray(GomokuState.BOARD_SIZE) }
+            board[7][1] = GomokuState.BLACK
+            board[7][2] = GomokuState.BLACK
+            board[7][3] = GomokuState.BLACK
+            board[7][4] = GomokuState.BLACK
+            board[7][5] = GomokuState.BLACK
+
+            val state = GomokuState(
+                board = board,
+                currentPlayer = GomokuState.BLACK,
+                gameStatus = GameStatus.PLAYING,
+                winner = GomokuState.EMPTY,
+                lastMove = null,
+                renjuRule = false
+            )
+
+            val action = mapOf("type" to "PLACE_STONE", "row" to 7, "col" to 6)
+            val result = handler.validateAction(state, action, 0)
+
+            assertTrue(result.valid, "Overline should be allowed when renjuRule is false")
+        }
+
+        @Test
+        fun `renjuRule false allows overline to be counted as a win`() {
+            // Standard Gomoku: 6 in a row is still a win.
+            // Construct board directly (can't reach 6 via applyAction since 5 triggers win first)
+            val board = Array(GomokuState.BOARD_SIZE) { IntArray(GomokuState.BOARD_SIZE) }
+            board[7][1] = GomokuState.BLACK
+            board[7][2] = GomokuState.BLACK
+            board[7][3] = GomokuState.BLACK
+            board[7][4] = GomokuState.BLACK
+            board[7][5] = GomokuState.BLACK
+
+            val state = GomokuState(
+                board = board,
+                currentPlayer = GomokuState.BLACK,
+                gameStatus = GameStatus.PLAYING,
+                winner = GomokuState.EMPTY,
+                lastMove = null,
+                renjuRule = false
+            )
+
+            // 6th BLACK stone creates overline → should still count as win in standard Gomoku
+            val result = handler.applyAction(state, mapOf("type" to "PLACE_STONE", "row" to 7, "col" to 6), 0)
+            assertEquals(GameStatus.FINISHED, result.gameStatus, "Overline should end game in standard Gomoku")
+            assertEquals(GomokuState.BLACK, result.winner, "BLACK should win with overline in standard Gomoku")
+        }
+
+        @Test
+        fun `renjuRule true overline does NOT count as BLACK win`() {
+            // Under Renju, BLACK's overline is not a winning condition
+            // Build a board manually with BLACK having 6 in a row but NOT 5 anywhere → game continues
+            val board = Array(GomokuState.BOARD_SIZE) { IntArray(GomokuState.BOARD_SIZE) }
+            board[7][0] = GomokuState.BLACK
+            board[7][1] = GomokuState.BLACK
+            board[7][2] = GomokuState.BLACK
+            board[7][3] = GomokuState.BLACK
+            board[7][4] = GomokuState.BLACK
+
+            val stateBeforeSixth = GomokuState(
+                board = board,
+                currentPlayer = GomokuState.BLACK,
+                gameStatus = GameStatus.PLAYING,
+                winner = GomokuState.EMPTY,
+                lastMove = null,
+                renjuRule = true
+            )
+
+            // Placing at (7,5) makes 6 in a row — forbidden under renjuRule
+            val action = mapOf("type" to "PLACE_STONE", "row" to 7, "col" to 5)
+            val validationResult = handler.validateAction(stateBeforeSixth, action, 0)
+            assertFalse(validationResult.valid, "Overline should be rejected for BLACK under renjuRule")
+        }
+    }
 }

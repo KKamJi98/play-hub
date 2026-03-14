@@ -14,9 +14,15 @@ object GomokuValidator {
      * Counts consecutive stones of the same color in each of the 4 direction pairs
      * passing through the last placed stone.
      *
+     * When renjuRule is true:
+     *   - BLACK wins only with exactly 5 (overline does not count as a win)
+     *   - WHITE wins with 5 or more
+     * When renjuRule is false (standard Gomoku):
+     *   - Both players win with 5 or more
+     *
      * @return the winning player (BLACK or WHITE), or EMPTY if no winner yet
      */
-    fun checkWinner(board: Array<IntArray>, lastMove: Move): Int {
+    fun checkWinner(board: Array<IntArray>, lastMove: Move, renjuRule: Boolean = false): Int {
         val row = lastMove.row
         val col = lastMove.col
         val player = board[row][col]
@@ -28,7 +34,11 @@ object GomokuValidator {
                 countDirection(board, row, col, dir[0], dir[1], player) +
                 countDirection(board, row, col, -dir[0], -dir[1], player)
 
-            if (count >= 5) return player
+            val isWin = when {
+                renjuRule && player == GomokuState.BLACK -> count == 5
+                else -> count >= 5
+            }
+            if (isWin) return player
         }
 
         return GomokuState.EMPTY

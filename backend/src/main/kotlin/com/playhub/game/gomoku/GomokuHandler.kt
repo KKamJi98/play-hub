@@ -12,12 +12,20 @@ class GomokuHandler : GameHandler<GomokuState, Any> {
 
     override fun createInitialState(settings: Map<String, Any>): GomokuState {
         val board = Array(GomokuState.BOARD_SIZE) { IntArray(GomokuState.BOARD_SIZE) }
+        val renjuRule = settings["renjuRule"] as? Boolean ?: true
+        val forbiddenPositions = if (renjuRule) {
+            RenjuValidator.getAllForbiddenPositions(board).map { (r, c) -> mapOf("row" to r, "col" to c) }
+        } else {
+            emptyList()
+        }
         return GomokuState(
             board = board,
             currentPlayer = GomokuState.BLACK,
             gameStatus = GameStatus.PLAYING,
             winner = GomokuState.EMPTY,
-            lastMove = null
+            lastMove = null,
+            renjuRule = renjuRule,
+            forbiddenPositions = forbiddenPositions
         )
     }
 
@@ -50,6 +58,13 @@ class GomokuHandler : GameHandler<GomokuState, Any> {
             return ValidationResult(false, "Cell ($row, $col) is already occupied.")
         }
 
+        // Renju rule: forbidden moves apply only to BLACK
+        if (state.renjuRule && state.currentPlayer == GomokuState.BLACK) {
+            if (RenjuValidator.isForbiddenMove(state.board, row, col)) {
+                return ValidationResult(false, "Forbidden move (renju rule): overline, double-four, or double-three at ($row, $col)")
+            }
+        }
+
         return ValidationResult(true)
     }
 
@@ -68,8 +83,8 @@ class GomokuHandler : GameHandler<GomokuState, Any> {
         val newHistory = state.moveHistory.toMutableList()
         newHistory.add(MoveRecord(row, col, state.currentPlayer))
 
-        // Check for winner
-        val winner = GomokuValidator.checkWinner(newBoard, move)
+        // Check for winner (pass renjuRule so BLACK overline does not count)
+        val winner = GomokuValidator.checkWinner(newBoard, move, state.renjuRule)
         val isFull = winner == GomokuState.EMPTY && GomokuValidator.isBoardFull(newBoard)
 
         val newStatus = if (winner != GomokuState.EMPTY || isFull) {
@@ -84,14 +99,28 @@ class GomokuHandler : GameHandler<GomokuState, Any> {
             if (state.currentPlayer == GomokuState.BLACK) GomokuState.WHITE else GomokuState.BLACK
         }
 
-        return GomokuState(
+        val newState = GomokuState(
             board = newBoard,
             currentPlayer = nextPlayer,
             gameStatus = newStatus,
             winner = winner,
             lastMove = move,
-            moveHistory = newHistory
+            moveHistory = newHistory,
+            renjuRule = state.renjuRule
         )
+
+        // Recalculate forbidden positions for the next BLACK turn
+        val forbiddenPositions = if (newState.renjuRule &&
+            newState.currentPlayer == GomokuState.BLACK &&
+            newState.gameStatus == GameStatus.PLAYING
+        ) {
+            RenjuValidator.getAllForbiddenPositions(newState.board)
+                .map { (r, c) -> mapOf("row" to r, "col" to c) }
+        } else {
+            emptyList()
+        }
+
+        return newState.copy(forbiddenPositions = forbiddenPositions)
     }
 
     override fun checkGameOver(state: GomokuState): GameResult {

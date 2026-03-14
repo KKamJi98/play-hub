@@ -11,6 +11,7 @@ import {
   type GameMode,
 } from "./constants";
 import type { WorkerRequest, WorkerResponse } from "./gomoku.worker";
+import { isForbiddenMove, getAllForbiddenPositions } from "./renjuValidator";
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,8 @@ export interface GomokuState {
   difficulty: Difficulty;
   winningLine: { row: number; col: number }[] | null;
   aiThinking: boolean;
+  renjuRule: boolean;
+  forbiddenPositions: Set<string>;
 }
 
 function createEmptyBoard(): Stone[][] {
@@ -33,7 +36,7 @@ function createEmptyBoard(): Stone[][] {
   );
 }
 
-function initialState(): GomokuState {
+function createInitialState(mode: GameMode = "local", difficulty: Difficulty = "medium"): GomokuState {
   return {
     board: createEmptyBoard(),
     currentPlayer: BLACK,
@@ -41,20 +44,33 @@ function initialState(): GomokuState {
     winner: 0,
     lastMove: null,
     moveHistory: [],
-    mode: "local",
-    difficulty: "medium",
+    mode,
+    difficulty,
     winningLine: null,
     aiThinking: false,
+    renjuRule: true,
+    forbiddenPositions: new Set<string>(),
   };
+}
+
+function initialState(): GomokuState {
+  return createInitialState();
 }
 
 // ─── Win Detection ───────────────────────────────────────────────────────────
 
+/**
+ * Find the winning line for `player` passing through (row, col).
+ *
+ * When renjuRule is true and player is BLACK, only an exact 5 counts as a win.
+ * For WHITE or when renjuRule is off, 5 or more counts.
+ */
 function findWinningLine(
   board: Stone[][],
   row: number,
   col: number,
   player: Player,
+  renjuRule: boolean,
 ): { row: number; col: number }[] | null {
   for (const [dr, dc] of DIRECTIONS) {
     const line: { row: number; col: number }[] = [{ row, col }];
@@ -77,7 +93,8 @@ function findWinningLine(
       c -= dc;
     }
 
-    if (line.length >= 5) return line;
+    const isBlackRenju = renjuRule && player === BLACK;
+    if (isBlackRenju ? line.length === 5 : line.length >= 5) return line;
   }
 
   return null;
@@ -97,7 +114,14 @@ type Action =
   | { type: "SET_DIFFICULTY"; difficulty: Difficulty }
   | { type: "SET_WINNER"; winner: 0 | 1 | 2; winningLine: { row: number; col: number }[] | null }
   | { type: "START_GAME" }
-  | { type: "SET_AI_THINKING"; thinking: boolean };
+  | { type: "SET_AI_THINKING"; thinking: boolean }
+  | { type: "SET_RENJU_RULE"; enabled: boolean };
+
+function computeForbiddenPositions(board: Stone[][], nextPlayer: Player, renjuRule: boolean): Set<string> {
+  return renjuRule && nextPlayer === BLACK
+    ? getAllForbiddenPositions(board)
+    : new Set<string>();
+}
 
 function reducer(state: GomokuState, action: Action): GomokuState {
   switch (action.type) {
@@ -107,10 +131,15 @@ function reducer(state: GomokuState, action: Action): GomokuState {
       const { row, col } = action;
       if (state.board[row]![col] !== EMPTY) return state;
 
+      // Renju rule: reject forbidden moves for BLACK
+      if (state.renjuRule && state.currentPlayer === BLACK) {
+        if (isForbiddenMove(state.board, row, col)) return state;
+      }
+
       const board = state.board.map((r) => [...r]);
       board[row]![col] = state.currentPlayer;
 
-      const winLine = findWinningLine(board, row, col, state.currentPlayer);
+      const winLine = findWinningLine(board, row, col, state.currentPlayer, state.renjuRule);
 
       if (winLine) {
         return {
@@ -121,6 +150,7 @@ function reducer(state: GomokuState, action: Action): GomokuState {
           gameStatus: "finished",
           winner: state.currentPlayer,
           winningLine: winLine,
+          forbiddenPositions: new Set<string>(),
         };
       }
 
@@ -133,16 +163,19 @@ function reducer(state: GomokuState, action: Action): GomokuState {
           gameStatus: "finished",
           winner: 0,
           winningLine: null,
+          forbiddenPositions: new Set<string>(),
         };
       }
 
       const nextPlayer: Player = state.currentPlayer === BLACK ? WHITE : BLACK;
+      const forbiddenPositions = computeForbiddenPositions(board, nextPlayer, state.renjuRule);
       return {
         ...state,
         board,
         currentPlayer: nextPlayer,
         lastMove: { row, col },
         moveHistory: [...state.moveHistory, { row, col, player: state.currentPlayer }],
+        forbiddenPositions,
       };
     }
 
@@ -152,7 +185,7 @@ function reducer(state: GomokuState, action: Action): GomokuState {
       const newBoard = state.board.map((r) => [...r]);
       newBoard[row]![col] = state.currentPlayer;
 
-      const winLine = findWinningLine(newBoard, row, col, state.currentPlayer);
+      const winLine = findWinningLine(newBoard, row, col, state.currentPlayer, state.renjuRule);
 
       if (winLine) {
         return {
@@ -164,6 +197,7 @@ function reducer(state: GomokuState, action: Action): GomokuState {
           winner: state.currentPlayer,
           winningLine: winLine,
           aiThinking: false,
+          forbiddenPositions: new Set<string>(),
         };
       }
 
@@ -177,10 +211,12 @@ function reducer(state: GomokuState, action: Action): GomokuState {
           winner: 0,
           winningLine: null,
           aiThinking: false,
+          forbiddenPositions: new Set<string>(),
         };
       }
 
       const nextPlayer: Player = state.currentPlayer === BLACK ? WHITE : BLACK;
+      const forbiddenPositions = computeForbiddenPositions(newBoard, nextPlayer, state.renjuRule);
       return {
         ...state,
         board: newBoard,
@@ -188,27 +224,32 @@ function reducer(state: GomokuState, action: Action): GomokuState {
         lastMove: { row, col },
         moveHistory: [...state.moveHistory, { row, col, player: state.currentPlayer }],
         aiThinking: false,
+        forbiddenPositions,
       };
     }
 
     case "RESET":
       return {
-        ...initialState(),
-        mode: state.mode,
-        difficulty: state.difficulty,
+        ...createInitialState(state.mode, state.difficulty),
+        renjuRule: state.renjuRule,
         gameStatus: "waiting",
+        forbiddenPositions: new Set<string>(),
       };
 
     case "SET_MODE":
-      return { ...initialState(), mode: action.mode };
+      return { ...createInitialState(action.mode, state.difficulty), renjuRule: state.renjuRule };
 
     case "SET_DIFFICULTY":
       return { ...state, difficulty: action.difficulty };
 
-    case "START_GAME":
+    case "START_GAME": {
+      const freshBoard = createEmptyBoard();
+      // After START_GAME BLACK plays first — compute forbidden for the fresh board
+      // (on an empty board there are no forbidden positions, but keep the logic consistent)
+      const forbiddenPositions = computeForbiddenPositions(freshBoard, BLACK, state.renjuRule);
       return {
         ...state,
-        board: createEmptyBoard(),
+        board: freshBoard,
         currentPlayer: BLACK,
         gameStatus: "playing",
         winner: 0,
@@ -216,10 +257,20 @@ function reducer(state: GomokuState, action: Action): GomokuState {
         moveHistory: [],
         winningLine: null,
         aiThinking: false,
+        forbiddenPositions,
       };
+    }
 
     case "SET_AI_THINKING":
       return { ...state, aiThinking: action.thinking };
+
+    case "SET_RENJU_RULE":
+      return {
+        ...createInitialState(state.mode, state.difficulty),
+        renjuRule: action.enabled,
+        gameStatus: "waiting",
+        forbiddenPositions: new Set<string>(),
+      };
 
     default:
       return state;
@@ -263,11 +314,12 @@ export function useGomokuGame() {
         board: state.board,
         difficulty: state.difficulty,
         currentPlayer: WHITE,
+        renjuRule: state.renjuRule,
       };
 
       workerRef.current?.postMessage(request);
     }
-  }, [state.currentPlayer, state.gameStatus, state.mode, state.aiThinking, state.board, state.difficulty]);
+  }, [state.currentPlayer, state.gameStatus, state.mode, state.aiThinking, state.board, state.difficulty, state.renjuRule]);
 
   const placeStone = useCallback(
     (row: number, col: number) => {
@@ -294,6 +346,10 @@ export function useGomokuGame() {
     dispatch({ type: "START_GAME" });
   }, []);
 
+  const setRenjuRule = useCallback((enabled: boolean) => {
+    dispatch({ type: "SET_RENJU_RULE", enabled });
+  }, []);
+
   return {
     state,
     placeStone,
@@ -301,5 +357,6 @@ export function useGomokuGame() {
     setMode,
     setDifficulty,
     startGame,
+    setRenjuRule,
   };
 }

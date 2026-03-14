@@ -25,16 +25,27 @@ function ModeSelection({
   onSelectMode,
   difficulty,
   onSelectDifficulty,
+  renjuRule,
+  onSetRenjuRule,
   onStart,
 }: {
   selectedMode: GameMode;
   onSelectMode: (mode: GameMode) => void;
   difficulty: Difficulty;
   onSelectDifficulty: (d: Difficulty) => void;
+  renjuRule: boolean;
+  onSetRenjuRule: (enabled: boolean) => void;
   onStart: () => void;
 }) {
   const { theme } = useTheme();
   const isDark = theme === "dark";
+
+  const activeStyle = isDark
+    ? "bg-[#00f0ff]/20 text-[#00f0ff] border-[#00f0ff]/40"
+    : "bg-blue-100 text-blue-700 border-blue-300";
+  const inactiveStyle = isDark
+    ? "bg-white/5 text-[#8892a4] border-white/10 hover:bg-white/10"
+    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100";
 
   return (
     <div className="flex flex-col items-center gap-8 py-8 px-4">
@@ -90,13 +101,7 @@ function ModeSelection({
                 onClick={() => onSelectDifficulty(value)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border
                   ${
-                    difficulty === value
-                      ? isDark
-                        ? "bg-[#00f0ff]/20 text-[#00f0ff] border-[#00f0ff]/40"
-                        : "bg-blue-100 text-blue-700 border-blue-300"
-                      : isDark
-                        ? "bg-white/5 text-[#8892a4] border-white/10 hover:bg-white/10"
-                        : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                    difficulty === value ? activeStyle : inactiveStyle
                   }`}
               >
                 {label}
@@ -105,6 +110,30 @@ function ModeSelection({
           </div>
         </div>
       )}
+
+      {/* Renju Rule toggle (all modes) */}
+      <div className="flex flex-col items-center gap-3">
+        <span className="text-sm font-medium text-[#8892a4]">렌주 룰</span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => onSetRenjuRule(true)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border
+              ${renjuRule ? activeStyle : inactiveStyle}`}
+          >
+            ON
+          </button>
+          <button
+            onClick={() => onSetRenjuRule(false)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border
+              ${!renjuRule ? activeStyle : inactiveStyle}`}
+          >
+            OFF
+          </button>
+        </div>
+        <p className="text-xs text-[#8892a4] text-center max-w-xs">
+          흑의 금수(장목·사사·삼삼)를 제한하는 국제 렌주 룰
+        </p>
+      </div>
 
       {/* Start button */}
       <button
@@ -262,7 +291,7 @@ function GameOverModal({
 }
 
 export default function GomokuPage() {
-  const { state, placeStone, reset, setMode, setDifficulty, startGame } = useGomokuGame();
+  const { state, placeStone, reset, setMode, setDifficulty, startGame, setRenjuRule } = useGomokuGame();
   const online = useOnlineGame("gomoku");
   const { theme } = useTheme();
   const isCoarsePointer = useCoarsePointer();
@@ -299,7 +328,7 @@ export default function GomokuPage() {
                   gameLabel="오목 - 15x15 보드에서 5개를 연속으로 놓으세요"
                   onSetNickname={online.setNickname}
                   onConfirmNickname={online.confirmNickname}
-                  onCreateRoom={online.createRoom}
+                  onCreateRoom={() => online.createRoom({ settings: { renjuRule: state.renjuRule } })}
                   onJoinRoom={online.joinRoom}
                   onJoinQueue={online.joinQueue}
                   onCancelQueue={online.cancelQueue}
@@ -313,6 +342,8 @@ export default function GomokuPage() {
                 onSelectMode={setMode}
                 difficulty={state.difficulty}
                 onSelectDifficulty={setDifficulty}
+                renjuRule={state.renjuRule}
+                onSetRenjuRule={setRenjuRule}
                 onStart={startGame}
               />
             )}
@@ -331,6 +362,8 @@ export default function GomokuPage() {
             onSelectMode={setMode}
             difficulty={state.difficulty}
             onSelectDifficulty={setDifficulty}
+            renjuRule={state.renjuRule}
+            onSetRenjuRule={setRenjuRule}
             onStart={state.mode === "online" ? () => {} : startGame}
           />
         </div>
@@ -346,6 +379,8 @@ export default function GomokuPage() {
     lastMove?: { row: number; col: number } | null;
     gameStatus?: string;
     winner?: number;
+    forbiddenPositions?: { row: number; col: number }[];
+    renjuRule?: boolean;
   } | null;
 
   const displayBoard: Stone[][] = isOnlinePlaying && serverState?.board
@@ -363,6 +398,16 @@ export default function GomokuPage() {
   const displayWinner = isOnlinePlaying && serverState?.winner !== undefined
     ? (serverState.winner as 0 | 1 | 2)
     : state.winner;
+
+  // Renju rule state for display
+  const displayRenjuRule = isOnlinePlaying && serverState?.renjuRule !== undefined
+    ? serverState.renjuRule
+    : state.renjuRule;
+
+  // Forbidden positions: from server in online mode, from local state otherwise
+  const displayForbiddenPositions: Set<string> = isOnlinePlaying && serverState?.forbiddenPositions
+    ? new Set(serverState.forbiddenPositions.map((p) => `${p.row},${p.col}`))
+    : state.forbiddenPositions;
 
   // In online mode, only allow placing stones on your turn
   const myPlayerStone = online.state.playerIndex !== null ? online.state.playerIndex + 1 : 0;
@@ -384,6 +429,12 @@ export default function GomokuPage() {
     }
     reset();
   };
+
+  // Only pass forbidden positions when it's BLACK's turn
+  const boardForbiddenPositions =
+    displayRenjuRule && displayCurrentPlayer === BLACK
+      ? displayForbiddenPositions
+      : undefined;
 
   return (
     <GameViewport title="오목">
@@ -436,6 +487,7 @@ export default function GomokuPage() {
               gameStatus={displayGameStatus}
               aiThinking={state.aiThinking || disableBoard}
               onPlaceStone={handlePlaceStone}
+              forbiddenPositions={boardForbiddenPositions}
             />
           </div>
 
@@ -464,6 +516,9 @@ export default function GomokuPage() {
                 {isOnlinePlaying && isMyTurn && " 당신이 둘 수 있습니다."}
                 {isOnlinePlaying && !isMyTurn && " 상대가 두는 중입니다."}
               </p>
+              {displayRenjuRule && (
+                <p className="mt-1 text-xs text-stone-400">렌주 룰 적용 중</p>
+              )}
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-4 [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-gray-50">

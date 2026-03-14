@@ -5,6 +5,7 @@ export interface WorkerRequest {
   board: Stone[][];
   difficulty: Difficulty;
   currentPlayer: Player;
+  renjuRule: boolean;
 }
 
 export interface WorkerResponse {
@@ -13,8 +14,8 @@ export interface WorkerResponse {
 }
 
 self.onmessage = (e: MessageEvent<WorkerRequest>) => {
-  const { board, difficulty, currentPlayer } = e.data;
-  const result = findBestMove(board, difficulty, currentPlayer);
+  const { board, difficulty, currentPlayer, renjuRule } = e.data;
+  const result = findBestMove(board, difficulty, currentPlayer, renjuRule);
   self.postMessage({
     move: result.move,
     stats: result.stats,

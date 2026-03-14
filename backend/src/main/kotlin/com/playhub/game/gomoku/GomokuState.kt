@@ -6,7 +6,9 @@ data class GomokuState(
     val gameStatus: GameStatus,
     val winner: Int,
     val lastMove: Move?,
-    val moveHistory: MutableList<MoveRecord> = mutableListOf()
+    val moveHistory: MutableList<MoveRecord> = mutableListOf(),
+    val renjuRule: Boolean = true,
+    val forbiddenPositions: List<Map<String, Int>> = emptyList()
 ) {
     companion object {
         const val BOARD_SIZE = 15
@@ -24,6 +26,8 @@ data class GomokuState(
         if (winner != other.winner) return false
         if (lastMove != other.lastMove) return false
         if (moveHistory != other.moveHistory) return false
+        if (renjuRule != other.renjuRule) return false
+        if (forbiddenPositions != other.forbiddenPositions) return false
         return true
     }
 
@@ -34,6 +38,8 @@ data class GomokuState(
         result = 31 * result + winner
         result = 31 * result + (lastMove?.hashCode() ?: 0)
         result = 31 * result + moveHistory.hashCode()
+        result = 31 * result + renjuRule.hashCode()
+        result = 31 * result + forbiddenPositions.hashCode()
         return result
     }
 }

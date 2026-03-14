@@ -12,6 +12,7 @@ interface GomokuBoardProps {
   gameStatus: "waiting" | "playing" | "finished";
   aiThinking: boolean;
   onPlaceStone: (row: number, col: number) => void;
+  forbiddenPositions?: Set<string>;
 }
 
 export default function GomokuBoard({
@@ -22,6 +23,7 @@ export default function GomokuBoard({
   gameStatus,
   aiThinking,
   onPlaceStone,
+  forbiddenPositions,
 }: GomokuBoardProps) {
   const { theme } = useTheme();
   const { displayScale } = useDisplaySettings();
@@ -42,6 +44,9 @@ export default function GomokuBoard({
 
   const activateCell = (row: number, col: number, cell: Stone) => {
     if (!isInteractive || cell !== EMPTY) return;
+
+    // Don't allow placing on forbidden positions
+    if (forbiddenPositions?.has(`${row},${col}`)) return;
 
     if (isCoarsePointer) {
       if (hoverPos?.row === row && hoverPos?.col === col) {
@@ -161,8 +166,11 @@ export default function GomokuBoard({
               row.map((cell, c) => {
                 const isLastMove = lastMove?.row === r && lastMove?.col === c;
                 const isWinning = winningSet.has(`${r},${c}`);
+                const isForbidden = cell === EMPTY && forbiddenPositions?.has(`${r},${c}`);
                 const isHovered =
                   isInteractive && hoverPos?.row === r && hoverPos?.col === c && cell === EMPTY;
+                // Don't show hover preview on forbidden cells
+                const showHoverPreview = isHovered && !isForbidden;
 
                 const leftPct = (c / cellCount) * 100;
                 const topPct = (r / cellCount) * 100;
@@ -178,7 +186,12 @@ export default function GomokuBoard({
                       width: `${cellSizePct}%`,
                       height: `${cellSizePct}%`,
                       transform: "translate(-50%, -50%)",
-                      cursor: isInteractive && cell === EMPTY ? "pointer" : "default",
+                      cursor:
+                        isInteractive && cell === EMPTY && !isForbidden
+                          ? "pointer"
+                          : isInteractive && isForbidden
+                            ? "not-allowed"
+                            : "default",
                     }}
                     onClick={() => {
                       activateCell(r, c, cell);
@@ -232,8 +245,25 @@ export default function GomokuBoard({
                       </div>
                     )}
 
+                    {/* Forbidden position marker (red X) */}
+                    {isForbidden && (
+                      <svg
+                        className="absolute pointer-events-none"
+                        style={{
+                          width: "40%",
+                          height: "40%",
+                          opacity: 0.45,
+                          zIndex: 4,
+                        }}
+                        viewBox="0 0 10 10"
+                      >
+                        <line x1="1" y1="1" x2="9" y2="9" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="9" y1="1" x2="1" y2="9" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    )}
+
                     {/* Hover preview */}
-                    {isHovered && (
+                    {showHoverPreview && (
                       <div
                         className="absolute rounded-full pointer-events-none"
                         style={{
