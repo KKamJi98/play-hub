@@ -3,6 +3,7 @@ import { clampMagnitude3, cross3, normalize3, scale3, vec3 } from "./math3";
 import { Vec2 } from "./vector";
 import {
   ELEVATION_SOFT_RAMP_DEGREES,
+  K_SQUIRT,
   M,
   MAX_ELEVATION_DEGREES,
   MAX_SHOT_OMEGA,
@@ -97,8 +98,17 @@ export function createShotMotion(shot: ShotParamsV2): { vel: Vec2; omega: Omega3
     MAX_SHOT_OMEGA,
   );
 
+  // Squirt: off-center tip hit deflects cue ball direction
+  const squirtAngle = -K_SQUIRT * tip.x;
+  const cosS = Math.cos(squirtAngle);
+  const sinS = Math.sin(squirtAngle);
+  const deflectedDir = new Vec2(
+    dir.x * cosS - dir.y * sinS,
+    dir.x * sinS + dir.y * cosS,
+  );
+
   return {
-    vel: dir.scale(shot.speedMps * horizontalScale),
+    vel: deflectedDir.scale(shot.speedMps * horizontalScale),
     omega: {
       x: omegaVector.x,
       y: omegaVector.y,

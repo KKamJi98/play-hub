@@ -42,6 +42,20 @@ export const MU_C = 0.14;
 /** Ball-cushion coefficient of restitution */
 export const E_C = 0.82;
 
+/** Squirt angle per unit tip offset (radians).
+ *  최대 english(0.85)에서 ~4° ≈ 0.07 rad → K ≈ 0.082 */
+export const K_SQUIRT = 0.082;
+
+/** Swerve coefficient: 접촉 패치에서 sidespin이 만드는 횡력 계수.
+ *  최대 english 풀 테이블 샷에서 ~2-4° 커브 생성 기준. */
+export const K_SWERVE = 0.0135;
+
+/** 쿠션 접촉 높이 (ball diameter 대비 비율, 0.5=중심) */
+export const CUSHION_CONTACT_HEIGHT = 0.635;
+
+/** 쿠션 접촉점 수직 마찰 계수 */
+export const MU_C_VERT = 0.10;
+
 // ---- Coordinate conversion ------------------------------------------------
 
 /** Pixels per meter — maps carom table internal width (1.42m) to TABLE_WIDTH */

@@ -1,6 +1,7 @@
 import type { Ball, Omega3 } from "./ball";
 import { Vec2 } from "./vector";
 import {
+  K_SWERVE,
   M,
   MU_R,
   MU_S,
@@ -80,7 +81,19 @@ export function approximateFrictionVector(ball: Ball): Vec2 {
     const slip = clothContactVelocity(ball);
     const slipSpeed = slip.length();
     if (slipSpeed === 0) return Vec2.zero();
-    return slip.scale((-MU_S * M * g) / slipSpeed);
+    let force = slip.scale((-MU_S * M * g) / slipSpeed);
+
+    // Swerve force for guide line prediction
+    if (Math.abs(ball.omega.z) > OMEGA_THRESHOLD) {
+      const speed = ball.vel.length();
+      if (speed > 0.01) {
+        const velDir = ball.vel.scale(1 / speed);
+        const swerveDir = velDir.perp();
+        force = force.add(swerveDir.scale(K_SWERVE * ball.omega.z * M * g));
+      }
+    }
+
+    return force;
   }
 
   if (ball.phase === "rolling") {
@@ -108,7 +121,15 @@ export function applySlidingContact(ball: Ball, dt: number): void {
   const acceleration = frictionForce.scale(1 / M);
   const torqueDelta = clothTorqueDelta(frictionForce, dt);
 
-  const nextVel = startVel.add(acceleration.scale(dt));
+  // Swerve: sidespin creates lateral force via cloth contact patch
+  const startSpeed = startVel.length();
+  let swerveAccel = Vec2.zero();
+  if (startSpeed > 0.01 && Math.abs(startOmega.z) > OMEGA_THRESHOLD) {
+    const velDir = startVel.scale(1 / startSpeed);
+    swerveAccel = velDir.perp().scale(K_SWERVE * startOmega.z * g);
+  }
+
+  const nextVel = startVel.add(acceleration.scale(dt)).add(swerveAccel.scale(dt));
   const nextOmega = {
     x: startOmega.x + torqueDelta.x,
     y: startOmega.y + torqueDelta.y,
@@ -131,7 +152,7 @@ export function applySlidingContact(ball: Ball, dt: number): void {
     const slidingDt = dt * transitionRatio;
     const rollingDt = dt - slidingDt;
 
-    ball.vel = startVel.add(acceleration.scale(slidingDt));
+    ball.vel = startVel.add(acceleration.scale(slidingDt)).add(swerveAccel.scale(slidingDt));
     ball.omega.z = applySpinDecay(startOmega.z, slidingDt);
     const rollingOmega = rollingOmegaForVelocity(ball.vel);
     ball.omega.x = rollingOmega.x;
