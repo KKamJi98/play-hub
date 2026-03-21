@@ -188,7 +188,7 @@ function drawDebugOverlay(ctx: CanvasRenderingContext2D, balls: Ball[]): void {
     const omegaVector = new Vec2(ball.omega.y, -ball.omega.x);
     drawDebugVector(ctx, ball.pos, ball.vel, "rgba(80,180,255,0.8)", 70);
     drawDebugVector(ctx, ball.pos, clothContactVelocity(ball), "rgba(40,220,120,0.75)", 32);
-    drawDebugVector(ctx, ball.pos, approximateFrictionVector(ball), "rgba(255,180,60,0.75)", 3.5);
+    drawDebugVector(ctx, ball.pos, approximateFrictionVector(ball, true), "rgba(255,180,60,0.75)", 3.5);
     drawDebugVector(ctx, ball.pos, omegaVector, "rgba(255,90,90,0.75)", 0.7);
 
     ctx.fillStyle = "rgba(255,255,255,0.75)";

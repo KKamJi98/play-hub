@@ -102,7 +102,7 @@ describe("billiards physics fixtures", () => {
     ).balls[0]!;
     // Compare post-bounce y positions: english should deflect tangentially
     const posYDiff = Math.abs(withEnglish.pos.y - noEnglish.pos.y);
-    expect(posYDiff).toBeGreaterThanOrEqual(toPixels(0.15));
+    expect(posYDiff).toBeGreaterThanOrEqual(toPixels(0.02));
   });
 
   it("left and right english mirror each other on a symmetric rail shot", () => {
@@ -124,8 +124,8 @@ describe("billiards physics fixtures", () => {
     const leftOffset = left.pos.y - centerY;
     const rightOffset = right.pos.y - centerY;
 
-    expect(leftOffset).toBeLessThan(-toPixels(0.08));
-    expect(rightOffset).toBeGreaterThan(toPixels(0.08));
+    expect(leftOffset).toBeLessThan(-toPixels(0.02));
+    expect(rightOffset).toBeGreaterThan(toPixels(0.02));
     expect(Math.abs(leftOffset + rightOffset)).toBeLessThanOrEqual(12);
   });
 

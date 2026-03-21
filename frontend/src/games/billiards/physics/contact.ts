@@ -76,15 +76,15 @@ export function applySpinDecay(omegaZ: number, dt: number): number {
   return omegaZ - Math.sign(omegaZ) * spinDecel;
 }
 
-export function approximateFrictionVector(ball: Ball): Vec2 {
+export function approximateFrictionVector(ball: Ball, includeSwerve = false): Vec2 {
   if (ball.phase === "sliding") {
     const slip = clothContactVelocity(ball);
     const slipSpeed = slip.length();
     if (slipSpeed === 0) return Vec2.zero();
     let force = slip.scale((-MU_S * M * g) / slipSpeed);
 
-    // Swerve force for guide line prediction
-    if (Math.abs(ball.omega.z) > OMEGA_THRESHOLD) {
+    // Swerve force (opt-in: debug visualization only, not for stop detection)
+    if (includeSwerve && Math.abs(ball.omega.z) > OMEGA_THRESHOLD) {
       const speed = ball.vel.length();
       if (speed > 0.01) {
         const velDir = ball.vel.scale(1 / speed);
