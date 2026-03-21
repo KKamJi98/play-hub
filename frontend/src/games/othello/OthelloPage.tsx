@@ -394,8 +394,8 @@ export default function OthelloPage() {
   const displayScores = isOnlinePlaying && serverState?.scores
     ? serverState.scores
     : state.scores;
-  const displayValidMoves = isOnlinePlaying && serverState?.validMoves
-    ? serverState.validMoves
+  const displayValidMoves = isOnlinePlaying
+    ? (serverState?.validMoves ?? [])
     : state.validMoves;
 
   const myPlayerStone = online.state.playerIndex !== null ? online.state.playerIndex + 1 : 0;

@@ -91,9 +91,9 @@ function minimax(
 
   const moves = getValidMoves(board, currentPlayer);
 
-  // If current player has no moves, pass turn
+  // If current player has no moves, pass turn (don't consume depth — pass isn't a real move)
   if (moves.length === 0) {
-    return minimax(board, depth - 1, alpha, beta, !isMaximizing, aiPlayer, startTime, stats);
+    return minimax(board, depth, alpha, beta, !isMaximizing, aiPlayer, startTime, stats);
   }
 
   // Move ordering
