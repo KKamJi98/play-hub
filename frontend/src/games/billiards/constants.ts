@@ -86,7 +86,7 @@ export const MAX_SIMULATION_STEPS_PER_TICK = 12;
 export const MAX_GUIDE_STEPS = 120;
 
 /** Velocity threshold (m/s) below which a ball is considered stopped */
-export const STOP_THRESHOLD = 0.02;
+export const STOP_THRESHOLD = 0.005;
 
 /** Angular velocity threshold (rad/s) */
 export const OMEGA_THRESHOLD = 0.15;

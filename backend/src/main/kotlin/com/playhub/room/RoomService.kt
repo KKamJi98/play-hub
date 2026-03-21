@@ -36,9 +36,11 @@ class RoomService {
         return room
     }
 
+    @Synchronized
     fun joinRoom(roomId: String, player: Player): Room? {
         val room = rooms[roomId] ?: return null
         if (room.state != RoomState.WAITING) return null
+        if (room.players.size >= 2) return null
         room.players.add(player)
         return room
     }

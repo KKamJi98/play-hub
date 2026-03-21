@@ -1,7 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOthelloGame } from "./useOthelloGame";
 import OthelloBoard from "./OthelloBoard";
-import { BLACK, WHITE, type Stone, type Difficulty, type GameMode } from "./constants";
+import { BLACK, WHITE, EMPTY, type Stone, type Difficulty, type GameMode } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
 import { useOnlineGame } from "../../hooks/useOnlineGame";
 import OnlineLobby from "../../components/online/OnlineLobby";
@@ -303,12 +303,42 @@ export default function OthelloPage() {
   const isCoarsePointer = useCoarsePointer();
   const isDark = theme === "dark";
 
+  // Track previous board to compute flipped stones for online mode
+  const prevBoardRef = useRef<number[][] | null>(null);
+  const [onlineFlippedStones, setOnlineFlippedStones] = useState<{ row: number; col: number }[]>([]);
+
   // Auto-start game when guest receives GAME_STARTED (online phase becomes 'playing')
   useEffect(() => {
     if (online.state.phase === "playing" && state.gameStatus !== "playing") {
       startGame();
     }
   }, [online.state.phase, state.gameStatus, startGame]);
+
+  // Compute flippedStones by diffing previous and current server board
+  const onlineServerState = online.state.gameState as { board?: number[][] } | null;
+  useEffect(() => {
+    const newBoard = onlineServerState?.board;
+    if (!newBoard) {
+      prevBoardRef.current = null;
+      return;
+    }
+    const prevBoard = prevBoardRef.current;
+    if (prevBoard) {
+      const flipped: { row: number; col: number }[] = [];
+      for (let r = 0; r < newBoard.length; r++) {
+        for (let c = 0; c < (newBoard[r]?.length ?? 0); c++) {
+          const prev = prevBoard[r]?.[c];
+          const curr = newBoard[r]?.[c];
+          // A stone was flipped: previously occupied by one player, now the other
+          if (prev !== EMPTY && curr !== EMPTY && prev !== curr) {
+            flipped.push({ row: r, col: c });
+          }
+        }
+      }
+      setOnlineFlippedStones(flipped);
+    }
+    prevBoardRef.current = newBoard;
+  }, [onlineServerState?.board]);
 
   // Online mode: show lobby before game starts
   if (state.mode === "online" && state.gameStatus === "waiting") {
@@ -472,7 +502,7 @@ export default function OthelloPage() {
               currentPlayer={displayCurrentPlayer}
               lastMove={isOnlinePlaying && serverState ? serverState.lastMove ?? null : state.lastMove}
               validMoves={isMyTurn ? displayValidMoves : []}
-              flippedStones={state.flippedStones}
+              flippedStones={isOnlinePlaying ? onlineFlippedStones : state.flippedStones}
               gameStatus={displayGameStatus}
               aiThinking={state.aiThinking || disableBoard}
               onPlaceStone={handlePlaceStone}

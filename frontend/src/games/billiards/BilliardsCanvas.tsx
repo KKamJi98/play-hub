@@ -326,6 +326,23 @@ export default function BilliardsCanvas({
     activePointerIdRef.current = null;
   }, []);
 
+  const handleLostPointerCapture = useCallback(() => {
+    aimingRef.current = false;
+    activePointerIdRef.current = null;
+  }, []);
+
+  // Fallback: window-level pointerup catches releases outside the browser window
+  useEffect(() => {
+    const onWindowPointerUp = () => {
+      if (aimingRef.current) {
+        aimingRef.current = false;
+        activePointerIdRef.current = null;
+      }
+    };
+    window.addEventListener("pointerup", onWindowPointerUp);
+    return () => window.removeEventListener("pointerup", onWindowPointerUp);
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -416,6 +433,7 @@ export default function BilliardsCanvas({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onLostPointerCapture={handleLostPointerCapture}
       />
     </div>
   );

@@ -41,6 +41,27 @@ class BilliardsHandler : GameHandler<BilliardsState, Any> {
             return ValidationResult(false, "Not your turn")
         }
 
+        if (type == "SCORE_UPDATE") {
+            val scores = (actionMap["scores"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }
+            if (scores == null || scores.size != 2) {
+                return ValidationResult(false, "Invalid scores format")
+            }
+            if (scores.any { it < 0 || it > state.targetScore }) {
+                return ValidationResult(false, "Score out of range")
+            }
+            // Scores can only stay the same or increase by at most 3 per update
+            for (i in scores.indices) {
+                val diff = scores[i] - state.scores[i]
+                if (diff < 0 || diff > 3) {
+                    return ValidationResult(false, "Invalid score change")
+                }
+            }
+            val winner = (actionMap["winner"] as? Number)?.toInt() ?: -1
+            if (winner !in -1..1) {
+                return ValidationResult(false, "Invalid winner")
+            }
+        }
+
         return ValidationResult(true)
     }
 

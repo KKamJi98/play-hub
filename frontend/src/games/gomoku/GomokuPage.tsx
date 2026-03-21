@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useGomokuGame } from "./useGomokuGame";
 import GomokuBoard from "./GomokuBoard";
-import { BLACK, type Stone, type Difficulty, type GameMode } from "./constants";
+import { BLACK, BOARD_SIZE, DIRECTIONS, EMPTY, type Player, type Stone, type Difficulty, type GameMode } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
 import { useOnlineGame } from "../../hooks/useOnlineGame";
 import OnlineLobby from "../../components/online/OnlineLobby";
@@ -279,6 +279,39 @@ function GameOverModal({
   );
 }
 
+/** Scan the entire board to find a winning line for `player`. */
+function computeWinningLineFromBoard(
+  board: Stone[][],
+  player: Player,
+  renjuRule: boolean,
+): { row: number; col: number }[] | null {
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let col = 0; col < BOARD_SIZE; col++) {
+      if (board[row]![col] !== player) continue;
+      for (const [dr, dc] of DIRECTIONS) {
+        const line: { row: number; col: number }[] = [{ row, col }];
+        let r = row + dr;
+        let c = col + dc;
+        while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && board[r]![c] === player) {
+          line.push({ row: r, col: c });
+          r += dr;
+          c += dc;
+        }
+        r = row - dr;
+        c = col - dc;
+        while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && board[r]![c] === player) {
+          line.push({ row: r, col: c });
+          r -= dr;
+          c -= dc;
+        }
+        const isBlackRenju = renjuRule && player === BLACK;
+        if (isBlackRenju ? line.length === 5 : line.length >= 5) return line;
+      }
+    }
+  }
+  return null;
+}
+
 export default function GomokuPage() {
   const { state, placeStone, reset, setMode, setDifficulty, startGame } = useGomokuGame();
   const online = useOnlineGame("gomoku");
@@ -384,6 +417,20 @@ export default function GomokuPage() {
     ? (serverState.winner as 0 | 1 | 2)
     : state.winner;
 
+  // G-06: Compute winningLine client-side from server board when online game is finished
+  const displayWinningLine: { row: number; col: number }[] | null = (() => {
+    if (isOnlinePlaying && displayGameStatus === "finished" && displayWinner !== 0 && serverState?.board) {
+      const renjuRule = serverState.renjuRule ?? true;
+      return computeWinningLineFromBoard(displayBoard, displayWinner as Player, renjuRule);
+    }
+    return state.winningLine;
+  })();
+
+  // G-07: Derive move count from board in online mode (count non-empty cells)
+  const displayMoveCount = isOnlinePlaying && serverState?.board
+    ? displayBoard.reduce((acc, row) => acc + row.filter((c) => c !== EMPTY).length, 0)
+    : state.moveHistory.length;
+
   // Renju rule state for display
   const displayRenjuRule = isOnlinePlaying && serverState?.renjuRule !== undefined
     ? serverState.renjuRule
@@ -451,7 +498,7 @@ export default function GomokuPage() {
             />
 
             <div className="text-sm text-[#8892a4]">
-              총 {state.moveHistory.length}수
+              총 {displayMoveCount}수
             </div>
           </div>
         </div>
@@ -468,7 +515,7 @@ export default function GomokuPage() {
               board={displayBoard}
               currentPlayer={displayCurrentPlayer}
               lastMove={displayLastMove}
-              winningLine={state.winningLine}
+              winningLine={displayWinningLine}
               gameStatus={displayGameStatus}
               aiThinking={state.aiThinking || disableBoard}
               onPlaceStone={handlePlaceStone}

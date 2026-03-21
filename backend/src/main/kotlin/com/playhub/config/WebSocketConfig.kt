@@ -23,7 +23,10 @@ class WebSocketConfig : WebSocketMessageBrokerConfigurer {
 
     override fun registerStompEndpoints(registry: StompEndpointRegistry) {
         registry.addEndpoint("/ws")
-            .setAllowedOriginPatterns("*")
+            .setAllowedOriginPatterns(
+                "http://localhost:5173",
+                "https://play-hub.kkamji.net"
+            )
             .withSockJS()
     }
 }

@@ -6,6 +6,7 @@ import com.playhub.room.RoomState
 import org.slf4j.LoggerFactory
 import org.springframework.messaging.handler.annotation.MessageMapping
 import org.springframework.messaging.handler.annotation.Payload
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Controller
 import java.util.concurrent.ConcurrentHashMap
@@ -26,7 +27,22 @@ class GameMessageController(
     private val gameStates = ConcurrentHashMap<String, Any>()
 
     @MessageMapping("/game/action")
-    fun handleAction(@Payload request: GameActionRequest) {
+    fun handleAction(@Payload request: GameActionRequest, headerAccessor: SimpMessageHeaderAccessor) {
+        // Verify playerIndex matches the authenticated session
+        val wsSessionId = headerAccessor.sessionId
+        if (wsSessionId != null) {
+            val sessionInfo = roomService.getSessionInfo(wsSessionId)
+            if (sessionInfo != null) {
+                val (sessionRoomId, playerSessionId) = sessionInfo
+                val room2 = roomService.getRoom(sessionRoomId)
+                val actualPlayer = room2?.players?.find { it.sessionId == playerSessionId }
+                if (actualPlayer != null && actualPlayer.index != request.playerIndex) {
+                    log.warn("playerIndex mismatch: claimed {} but session maps to {}", request.playerIndex, actualPlayer.index)
+                    return
+                }
+            }
+        }
+
         val room = roomService.getRoom(request.roomId)
         if (room == null) {
             log.warn("Room not found: {}", request.roomId)

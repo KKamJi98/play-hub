@@ -59,6 +59,8 @@ class RoomController(
             index = playerIndex
         )
         roomService.joinRoom(id, player)
+            ?: return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(mapOf("error" to "Room is full or not accepting players"))
 
         val playersList = room.players.map {
             mapOf("sessionId" to it.sessionId, "nickname" to it.nickname, "index" to it.index)
