@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Vec2 } from "./physics/vector";
 import { MAX_SPIN } from "./constants";
 import { useTheme } from "../../hooks/useTheme";
@@ -63,6 +63,16 @@ export default function SpinSelector({ spin, onSpinChange }: SpinSelectorProps) 
     activePointerIdRef.current = null;
   }, []);
 
+  const handleLostPointerCapture = useCallback(() => {
+    activePointerIdRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const onWindowPointerUp = () => { activePointerIdRef.current = null; };
+    window.addEventListener("pointerup", onWindowPointerUp);
+    return () => window.removeEventListener("pointerup", onWindowPointerUp);
+  }, []);
+
   // Dot position: spin normalized to pixel offset
   const dotX = (spin.x / MAX_SPIN) * RADIUS;
   const dotY = (spin.y / MAX_SPIN) * RADIUS;
@@ -86,6 +96,7 @@ export default function SpinSelector({ spin, onSpinChange }: SpinSelectorProps) 
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onLostPointerCapture={handleLostPointerCapture}
       >
         {/* Crosshair */}
         <div

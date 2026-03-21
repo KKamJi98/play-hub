@@ -331,6 +331,16 @@ function PowerSlider({
     activePointerIdRef.current = null;
   }, []);
 
+  const handleLostPointerCapture = useCallback(() => {
+    activePointerIdRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const onWindowPointerUp = () => { activePointerIdRef.current = null; };
+    window.addEventListener("pointerup", onWindowPointerUp);
+    return () => window.removeEventListener("pointerup", onWindowPointerUp);
+  }, []);
+
   const TRACK_H = Math.round(
     (isCoarsePointer ? 176 : 152) * Math.min(displayScale, 1.1),
   );
@@ -362,6 +372,7 @@ function PowerSlider({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onLostPointerCapture={handleLostPointerCapture}
       >
         {/* Filled portion (from bottom) */}
         <div
@@ -660,7 +671,7 @@ export default function BilliardsPage() {
 
         <div className="grid w-full flex-1 min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] xl:grid-rows-[minmax(0,1fr)]">
           <div
-            className="flex h-full min-h-[360px] items-center justify-center rounded-[32px] border border-white/10 bg-white/5 p-3 backdrop-blur-md sm:p-4 xl:min-h-0"
+            className="flex h-full min-h-[260px] sm:min-h-[320px] items-center justify-center rounded-[32px] border border-white/10 bg-white/5 p-2 sm:p-4 backdrop-blur-md xl:min-h-0"
           >
             <BilliardsCanvas
               balls={state.balls}
@@ -677,9 +688,9 @@ export default function BilliardsPage() {
             />
           </div>
 
-          <aside className="flex h-full min-h-0 flex-col gap-4">
+          <aside className="flex h-full min-h-0 flex-col gap-3 xl:gap-4">
             <div
-              className="rounded-[32px] border p-6 backdrop-blur-md border-white/10 bg-white/5"
+              className="hidden xl:block rounded-[32px] border p-6 backdrop-blur-md border-white/10 bg-white/5"
             >
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8892a4]">
                 Turn
@@ -709,7 +720,7 @@ export default function BilliardsPage() {
             </div>
 
             <div
-              className="rounded-[32px] border p-6 backdrop-blur-md border-white/10 bg-white/5"
+              className="rounded-[32px] border p-4 sm:p-6 backdrop-blur-md border-white/10 bg-white/5"
             >
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8892a4]">
                 Shot Controls
@@ -717,7 +728,7 @@ export default function BilliardsPage() {
 
               {canAim ? (
                 <>
-                  <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 sm:grid-cols-2">
+                  <div className="mt-3 sm:mt-5 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 sm:gap-4 sm:grid-cols-2">
                     <div className="flex flex-col items-center justify-center rounded-[28px] border border-white/10 bg-black/10 px-4 py-4 [data-theme=light]_&:border-gray-200 [data-theme=light]_&:bg-gray-50">
                       <SpinSelector spin={state.aimSpin} onSpinChange={setAimSpin} />
                     </div>
@@ -786,7 +797,7 @@ export default function BilliardsPage() {
                   <button
                     onClick={handleShoot}
                     disabled={!state.aimDirection}
-                    className={`touch-manipulation mt-5 w-full rounded-2xl px-6 py-4 font-display text-base font-semibold tracking-wider transition-all duration-200 active:scale-95 ${
+                    className={`touch-manipulation mt-3 sm:mt-5 w-full rounded-2xl px-6 py-3 sm:py-4 font-display text-base font-semibold tracking-wider transition-all duration-200 active:scale-95 ${
                       state.aimDirection
                         ? "bg-gradient-to-r from-[#00f0ff] to-[#0080ff] text-[#0a0e1a] shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/50 hover:scale-[1.02]"
                         : "bg-white/5 text-white/30 border border-white/10 cursor-not-allowed"
@@ -807,10 +818,10 @@ export default function BilliardsPage() {
             </div>
 
             <div
-              className="flex min-h-0 flex-1 flex-col rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur-md"
+              className="hidden xl:flex min-h-0 flex-1 flex-col rounded-[32px] border border-white/10 bg-white/5 p-6 backdrop-blur-md"
             >
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#8892a4]">
-                Mobile Tips
+                Tips
               </p>
               <p className="mt-3 text-sm leading-6 text-[#8892a4]">
                 {isCoarsePointer

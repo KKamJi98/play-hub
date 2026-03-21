@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   SPIN_DURATION,
   MIN_ROTATIONS,
@@ -24,6 +24,22 @@ export function useRandomPicker() {
     result: null,
   });
 
+  const spinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (spinTimerRef.current !== null) clearTimeout(spinTimerRef.current);
+    };
+  }, []);
+
+  const clearSpinTimer = useCallback(() => {
+    if (spinTimerRef.current !== null) {
+      clearTimeout(spinTimerRef.current);
+      spinTimerRef.current = null;
+    }
+  }, []);
+
   const setItems = useCallback((items: string[]) => {
     setState((s) => ({ ...s, items }));
   }, []);
@@ -41,11 +57,7 @@ export function useRandomPicker() {
       const sliceAngle = 360 / s.items.length;
 
       // Calculate the rotation to land on the winner
-      // The pointer is at the top (0 degrees / 360 degrees)
-      // We rotate the wheel clockwise, so to land on slice i,
-      // the middle of that slice should align with the top
       const sliceMiddle = winnerIndex * sliceAngle + sliceAngle / 2;
-      // We need to rotate so that sliceMiddle ends up at top (360 - sliceMiddle)
       const targetAngle = 360 - sliceMiddle;
 
       // Add full rotations for visual effect
@@ -54,8 +66,10 @@ export function useRandomPicker() {
         Math.floor(Math.random() * (MAX_ROTATIONS - MIN_ROTATIONS + 1));
       const totalRotation = rotations * 360 + targetAngle;
 
-      // Schedule end of spin
-      setTimeout(() => {
+      // Schedule end of spin (outside setState to avoid side effect in updater)
+      clearSpinTimer();
+      spinTimerRef.current = setTimeout(() => {
+        spinTimerRef.current = null;
         setState((prev) => ({
           ...prev,
           spinning: false,
@@ -70,18 +84,20 @@ export function useRandomPicker() {
         result: null,
       };
     });
-  }, []);
+  }, [clearSpinTimer]);
 
   const resetSpin = useCallback(() => {
+    clearSpinTimer();
     setState((s) => ({
       ...s,
       spinning: false,
       targetRotation: null,
       result: null,
     }));
-  }, []);
+  }, [clearSpinTimer]);
 
   const goBack = useCallback(() => {
+    clearSpinTimer();
     setState((s) => ({
       ...s,
       phase: "setup",
@@ -89,7 +105,7 @@ export function useRandomPicker() {
       targetRotation: null,
       result: null,
     }));
-  }, []);
+  }, [clearSpinTimer]);
 
   return {
     state,
