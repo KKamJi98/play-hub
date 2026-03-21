@@ -26,6 +26,11 @@ class GameMessageController(
     // In-memory game states keyed by roomId
     private val gameStates = ConcurrentHashMap<String, Any>()
 
+    /** Called by RoomMessageController.handleStart to pre-register the initial state. */
+    fun registerInitialState(roomId: String, state: Any) {
+        gameStates[roomId] = state
+    }
+
     @MessageMapping("/game/action")
     fun handleAction(@Payload request: GameActionRequest, headerAccessor: SimpMessageHeaderAccessor) {
         // Verify playerIndex matches the authenticated session

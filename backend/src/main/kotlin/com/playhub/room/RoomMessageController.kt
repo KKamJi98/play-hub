@@ -13,6 +13,7 @@ import org.springframework.stereotype.Controller
 class RoomMessageController(
     private val messagingTemplate: SimpMessagingTemplate,
     private val roomService: RoomService,
+    private val gameMessageController: GameMessageController,
     gameHandlers: List<GameHandler<*, *>>
 ) {
 
@@ -77,13 +78,14 @@ class RoomMessageController(
             return
         }
 
-        // Create initial game state via the handler
+        // Create initial game state via the handler and register with GameMessageController
         val handler = handlerMap[room.gameId]
         var initialState: Any? = null
         if (handler != null) {
             @Suppress("UNCHECKED_CAST")
             val typedHandler = handler as GameHandler<Any, Any>
             initialState = typedHandler.createInitialState(room.settings)
+            gameMessageController.registerInitialState(roomId, initialState)
         }
 
         messagingTemplate.convertAndSend(
