@@ -61,7 +61,7 @@ function analyzeDirection(
   return { count, openEnds };
 }
 
-function countPatterns(board: Stone[][], player: Player): PatternCount {
+function countPatterns(board: Stone[][], player: Player, renjuRule = false): PatternCount {
   const patterns = emptyPattern();
   const visited = new Set<string>();
 
@@ -91,7 +91,7 @@ function countPatterns(board: Stone[][], player: Player): PatternCount {
 
         const { count, openEnds } = analyzeDirection(board, sr, sc, dr, dc, player);
 
-        if (count >= 5) {
+        if (renjuRule && player === 1 ? count === 5 : count >= 5) {
           patterns.five++;
         } else if (count === 4) {
           if (openEnds === 2) patterns.openFour++;
@@ -124,17 +124,19 @@ function patternScore(p: PatternCount): number {
  * Evaluate the board from the perspective of `aiPlayer`.
  * Positive = advantage for AI, negative = advantage for opponent.
  */
-export function evaluate(board: Stone[][], aiPlayer: Player): number {
+export function evaluate(board: Stone[][], aiPlayer: Player, renjuRule = false): number {
   const opponent: Player = aiPlayer === 1 ? 2 : 1;
-  const aiPatterns = countPatterns(board, aiPlayer);
-  const oppPatterns = countPatterns(board, opponent);
+  const aiPatterns = countPatterns(board, aiPlayer, renjuRule);
+  const oppPatterns = countPatterns(board, opponent, renjuRule);
   return patternScore(aiPatterns) - patternScore(oppPatterns);
 }
 
 /**
  * Quick check: does the given player have five-in-a-row?
+ * Under renju rules, BLACK (player 1) must have exactly 5 — overline (6+) is not a win.
  */
-export function hasFive(board: Stone[][], player: Player): boolean {
+export function hasFive(board: Stone[][], player: Player, renjuRule = false): boolean {
+  const BLACK = 1;
   for (let row = 0; row < BOARD_SIZE; row++) {
     for (let col = 0; col < BOARD_SIZE; col++) {
       if (board[row]![col] !== player) continue;
@@ -148,7 +150,11 @@ export function hasFive(board: Stone[][], player: Player): boolean {
           r += dr;
           c += dc;
         }
-        if (count >= 5) return true;
+        if (renjuRule && player === BLACK) {
+          if (count === 5) return true;
+        } else {
+          if (count >= 5) return true;
+        }
       }
     }
   }

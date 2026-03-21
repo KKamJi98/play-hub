@@ -112,11 +112,11 @@ function minimax(
 
   const opponent: Player = aiPlayer === 1 ? 2 : 1;
 
-  // Terminal checks
-  if (hasFive(board, aiPlayer)) return 1_000_000 + depth;
-  if (hasFive(board, opponent)) return -1_000_000 - depth;
+  // Terminal checks (renju: BLACK overline is not a win)
+  if (hasFive(board, aiPlayer, renjuRule)) return 1_000_000 + depth;
+  if (hasFive(board, opponent, renjuRule)) return -1_000_000 - depth;
   if (depth === 0 || Date.now() - startTime > TIME_LIMIT_MS) {
-    return evaluate(board, aiPlayer);
+    return evaluate(board, aiPlayer, renjuRule);
   }
 
   const currentPlayer = isMaximizing ? aiPlayer : opponent;
