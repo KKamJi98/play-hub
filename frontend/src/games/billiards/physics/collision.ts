@@ -1,7 +1,6 @@
 import type { Ball } from "./ball";
 import { Vec2 } from "./vector";
 import {
-  CUSHION_CONTACT_HEIGHT,
   E_BB,
   E_C,
   M,
@@ -145,7 +144,7 @@ function applyCushionBounce(ball: Ball, inwardNormal: Vec2, events?: CollisionEv
   const tangent = inwardNormal.perp();
   const vt = ball.vel.dot(tangent);
   const jn = -(1 + E_C) * vn * M;
-  const surfaceSlip = vt + R * ball.omega.z;
+  const surfaceSlip = vt - R * ball.omega.z;
   const desiredJt = -(2 * M / 7) * surfaceSlip;
   const maxJt = MU_C * jn;
   const jt = Math.max(-maxJt, Math.min(maxJt, desiredJt));
@@ -157,12 +156,11 @@ function applyCushionBounce(ball: Ball, inwardNormal: Vec2, events?: CollisionEv
   ball.vel = inwardNormal.scale(vnNew).add(tangent.scale(vtNew));
   ball.omega.z += deltaOmegaZ;
 
-  // Vertical friction from cushion contact height offset (topspin/backspin effect)
-  const h = (CUSHION_CONTACT_HEIGHT - 0.5) * 2 * R;
+  // Vertical friction: cushion contacts above center; lever arm is R (horizontal distance)
   const normalOmega = inwardNormal.x !== 0
     ? ball.omega.y * Math.sign(inwardNormal.x)
     : -ball.omega.x * Math.sign(inwardNormal.y);
-  const vertSlip = h * normalOmega;
+  const vertSlip = R * normalOmega;
   const desiredJv = -(M / 5) * vertSlip;
   const maxJv = MU_C_VERT * jn;
   const jv = Math.max(-maxJv, Math.min(maxJv, desiredJv));

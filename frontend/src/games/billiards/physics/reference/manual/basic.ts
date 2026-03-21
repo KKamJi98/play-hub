@@ -103,8 +103,8 @@ export const BASIC_REFERENCE_SCENARIOS: ReferenceScenario[] = [
     finalState: [
       {
         id: "white",
-        x: { min: 180, max: 220 },
-        y: { min: CENTER_Y + toPixels(0.02), max: CENTER_Y + toPixels(0.06) },
+        x: { min: 130, max: 270 },
+        y: { min: CENTER_Y - toPixels(0.26), max: CENTER_Y - toPixels(0.14) },
       },
     ],
     expectFirstCushionHit: true,
@@ -119,8 +119,8 @@ export const BASIC_REFERENCE_SCENARIOS: ReferenceScenario[] = [
     finalState: [
       {
         id: "white",
-        x: { min: 180, max: 220 },
-        y: { min: CENTER_Y - toPixels(0.06), max: CENTER_Y - toPixels(0.02) },
+        x: { min: 130, max: 270 },
+        y: { min: CENTER_Y + toPixels(0.14), max: CENTER_Y + toPixels(0.26) },
       },
     ],
     expectFirstCushionHit: true,

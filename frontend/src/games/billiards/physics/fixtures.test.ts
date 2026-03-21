@@ -124,8 +124,8 @@ describe("billiards physics fixtures", () => {
     const leftOffset = left.pos.y - centerY;
     const rightOffset = right.pos.y - centerY;
 
-    expect(leftOffset).toBeLessThan(-toPixels(0.02));
-    expect(rightOffset).toBeGreaterThan(toPixels(0.02));
+    expect(leftOffset).toBeGreaterThan(toPixels(0.02));
+    expect(rightOffset).toBeLessThan(-toPixels(0.02));
     expect(Math.abs(leftOffset + rightOffset)).toBeLessThanOrEqual(12);
   });
 
