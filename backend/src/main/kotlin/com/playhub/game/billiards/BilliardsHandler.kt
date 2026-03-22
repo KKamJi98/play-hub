@@ -105,14 +105,28 @@ class BilliardsHandler : GameHandler<BilliardsState, Any> {
                 val nextPlayer = (actionMap["nextPlayer"] as? Number)?.toInt() ?: state.currentPlayer
                 val phase = actionMap["phase"] as? String ?: state.phase
                 val winner = (actionMap["winner"] as? Number)?.toInt() ?: -1
+                val validBallIds = setOf("white", "yellow", "red1", "red2")
+                val balls = (actionMap["balls"] as? List<*>)?.let { rawBalls ->
+                    if (rawBalls.size != 4) return@let null
+                    rawBalls.mapNotNull { item ->
+                        val map = item as? Map<*, *> ?: return@mapNotNull null
+                        val id = map["id"] as? String ?: return@mapNotNull null
+                        val x = (map["x"] as? Number)?.toDouble() ?: return@mapNotNull null
+                        val y = (map["y"] as? Number)?.toDouble() ?: return@mapNotNull null
+                        if (id !in validBallIds) return@mapNotNull null
+                        mapOf("id" to id, "x" to x, "y" to y)
+                    }.takeIf { it.size == 4 }
+                }
 
                 val scoreData = mutableMapOf<String, Any>(
                     "type" to "SCORE_UPDATE",
                     "scores" to scores,
                     "nextPlayer" to nextPlayer,
                     "phase" to phase,
-                    "winner" to winner
+                    "winner" to winner,
+                    "playerIndex" to playerIndex
                 )
+                if (balls != null) scoreData["balls"] = balls
 
                 BilliardsState(
                     currentPlayer = nextPlayer,

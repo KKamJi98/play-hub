@@ -278,6 +278,7 @@ export function useBilliardsGame() {
       currentPlayer: 0 | 1;
       phase: GamePhase;
       winner: number;
+      balls?: { id: string; x: number; y: number }[];
     }) => {
       setState((prev) => {
         const winner = data.winner >= 0 ? (data.winner as 0 | 1) : null;
@@ -288,8 +289,24 @@ export function useBilliardsGame() {
               ? "scoring"
               : "aiming";
 
+        let balls = prev.balls;
+        if (data.balls && data.balls.length > 0) {
+          balls = prev.balls.map((ball) => {
+            const synced = data.balls!.find((b) => b.id === ball.id);
+            if (!synced) return ball;
+            return {
+              ...ball,
+              pos: new Vec2(synced.x, synced.y),
+              vel: Vec2.zero(),
+              omega: { x: 0, y: 0, z: 0 },
+              phase: "stationary" as const,
+            };
+          });
+        }
+
         return {
           ...prev,
+          balls,
           scores: data.scores,
           currentPlayer: data.currentPlayer,
           phase,

@@ -517,6 +517,7 @@ export default function BilliardsPage() {
         nextPlayer?: number;
         phase?: string;
         winner?: number;
+        balls?: { id: BallId; x: number; y: number }[];
       };
     } | null;
 
@@ -539,13 +540,14 @@ export default function BilliardsPage() {
       });
     }
 
-    // Receive opponent's SCORE_UPDATE
+    // Receive opponent's SCORE_UPDATE (includes authoritative ball positions)
     if (lastAction.type === "SCORE_UPDATE" && lastAction.playerIndex !== myPlayerIndex) {
       syncFromOpponent({
         scores: lastAction.scores ?? state.scores,
         currentPlayer: (lastAction.nextPlayer ?? state.currentPlayer) as 0 | 1,
         phase: (lastAction.phase ?? "aiming") as "aiming" | "scoring" | "gameOver",
         winner: lastAction.winner ?? -1,
+        balls: lastAction.balls,
       });
     }
   }, [online.state.gameState, isOnlineMode, myPlayerIndex, state.phase, state.scores, state.currentPlayer, applyOpponentShoot, syncFromOpponent]);
@@ -571,6 +573,7 @@ export default function BilliardsPage() {
           phase: state.phase,
           winner: state.winner ?? -1,
           playerIndex: myPlayerIndex ?? 0,
+          balls: state.balls.map((b) => ({ id: b.id, x: b.pos.x, y: b.pos.y })),
         });
       }
     }
