@@ -138,10 +138,11 @@ function hasFourInDirection(
     if (blocked || blackCount !== 4 || emptyIndex === -1) continue;
 
     // Tentatively fill the empty cell and verify it creates exactly 5
+    // in THIS direction (not any direction — a cross-direction five is irrelevant).
     const { r: er, c: ec } = window[emptyIndex]!;
     const prev = board[er]![ec]!;
     board[er]![ec] = BLACK;
-    const exact5 = isExactlyFive(board, er, ec);
+    const exact5 = countConsecutive(board, er, ec, dr, dc) === 5;
     board[er]![ec] = prev;
 
     if (exact5) return true;
@@ -167,6 +168,11 @@ function countFours(board: Stone[][], row: number, col: number): number {
 /**
  * Check if a four formed in direction (dr, dc) when BLACK placed at (er, ec)
  * is "open" — both ends of the run of 4 have empty cells so it can become 5.
+ *
+ * An open four (활사) requires:
+ *  1. Exactly 4 consecutive BLACK stones (a gap four / 뛴사 is never open)
+ *  2. Both ends are empty
+ *  3. Completing at either end creates exactly 5 (not an overline / 장목)
  *
  * (er, ec) is already BLACK on the board at call time.
  */
@@ -197,7 +203,12 @@ function isFourOpen(
     c -= dc;
   }
 
-  // Check both ends
+  // An open four requires exactly 4 consecutive stones.
+  // A gap four (e.g. B_BBB) can only be completed at the gap — never "open".
+  const runLength = maxOffset - minOffset + 1;
+  if (runLength !== 4) return false;
+
+  // Check both ends are empty
   const frontR = er + (maxOffset + 1) * dr;
   const frontC = ec + (maxOffset + 1) * dc;
   const backR = er + (minOffset - 1) * dr;
@@ -210,7 +221,20 @@ function isFourOpen(
     backR >= 0 && backR < BOARD_SIZE && backC >= 0 && backC < BOARD_SIZE &&
     board[backR]![backC] === EMPTY;
 
-  return frontOpen && backOpen;
+  if (!frontOpen || !backOpen) return false;
+
+  // Both completions must create exactly 5 — not an overline (6+).
+  // If one end leads to 장목, BLACK cannot use it, so the four is effectively half-open.
+  board[frontR]![frontC] = BLACK;
+  const frontCount = countConsecutive(board, frontR, frontC, dr, dc);
+  board[frontR]![frontC] = EMPTY;
+  if (frontCount !== 5) return false;
+
+  board[backR]![backC] = BLACK;
+  const backCount = countConsecutive(board, backR, backC, dr, dc);
+  board[backR]![backC] = EMPTY;
+
+  return backCount === 5;
 }
 
 /**

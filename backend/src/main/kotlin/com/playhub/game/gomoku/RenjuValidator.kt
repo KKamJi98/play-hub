@@ -311,7 +311,20 @@ object RenjuValidator {
         val bwdOpen = bwdEndR in 0 until BOARD_SIZE && bwdEndC in 0 until BOARD_SIZE &&
             board[bwdEndR][bwdEndC] == EMPTY
 
-        return fwdOpen && bwdOpen
+        if (!fwdOpen || !bwdOpen) return false
+
+        // Both completions must create exactly 5 (not an overline / 장목).
+        // If one end leads to 6+, BLACK cannot use it, making the four effectively half-open.
+        board[fwdEndR][fwdEndC] = BLACK
+        val fwdCount = countConsecutive(board, fwdEndR, fwdEndC, dr, dc)
+        board[fwdEndR][fwdEndC] = EMPTY
+        if (fwdCount != 5) return false
+
+        board[bwdEndR][bwdEndC] = BLACK
+        val bwdCount = countConsecutive(board, bwdEndR, bwdEndC, dr, dc)
+        board[bwdEndR][bwdEndC] = EMPTY
+
+        return bwdCount == 5
     }
 
     /**
