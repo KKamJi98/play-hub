@@ -476,6 +476,7 @@ export default function BilliardsPage() {
   const canAim = state.phase === "aiming" && isMyTurn;
 
   const handleReset = useCallback(() => {
+    pendingSyncRef.current = null;
     if (state.mode === "online") {
       online.leaveRoom();
     }
@@ -499,6 +500,13 @@ export default function BilliardsPage() {
   // ---- Online sync: receive opponent's SHOOT action ------------------------
 
   const lastGameStateRef = useRef<unknown>(null);
+  const pendingSyncRef = useRef<{
+    scores: [number, number];
+    currentPlayer: 0 | 1;
+    phase: "aiming" | "scoring" | "gameOver";
+    winner: number;
+    balls?: { id: BallId; x: number; y: number }[];
+  } | null>(null);
 
   useEffect(() => {
     if (!isOnlineMode) return;
@@ -528,7 +536,12 @@ export default function BilliardsPage() {
     if (!lastAction) return;
 
     // Receive opponent's SHOOT (use playerIndex instead of isMyTurn to avoid timing issues)
-    if (lastAction.type === "SHOOT" && lastAction.playerIndex !== myPlayerIndex && state.phase === "aiming") {
+    // Also accept "scoring" phase — auto-dismiss the scoring overlay from the previous turn
+    if (lastAction.type === "SHOOT" && lastAction.playerIndex !== myPlayerIndex &&
+        (state.phase === "aiming" || state.phase === "scoring")) {
+      if (state.phase === "scoring") {
+        continueAfterScore();
+      }
       applyOpponentShoot({
         direction: lastAction.direction ?? { x: 0, y: 0 },
         speedMps: lastAction.speedMps,
@@ -542,15 +555,22 @@ export default function BilliardsPage() {
 
     // Receive opponent's SCORE_UPDATE (includes authoritative ball positions)
     if (lastAction.type === "SCORE_UPDATE" && lastAction.playerIndex !== myPlayerIndex) {
-      syncFromOpponent({
+      const syncData = {
         scores: lastAction.scores ?? state.scores,
         currentPlayer: (lastAction.nextPlayer ?? state.currentPlayer) as 0 | 1,
         phase: (lastAction.phase ?? "aiming") as "aiming" | "scoring" | "gameOver",
         winner: lastAction.winner ?? -1,
         balls: lastAction.balls,
-      });
+      };
+      // Defer sync while local physics simulation is still running to avoid
+      // interrupting the ball animation; apply after physics completes.
+      if (state.phase === "rolling") {
+        pendingSyncRef.current = syncData;
+      } else {
+        syncFromOpponent(syncData);
+      }
     }
-  }, [online.state.gameState, isOnlineMode, myPlayerIndex, state.phase, state.scores, state.currentPlayer, applyOpponentShoot, syncFromOpponent]);
+  }, [online.state.gameState, isOnlineMode, myPlayerIndex, state.phase, state.scores, state.currentPlayer, applyOpponentShoot, syncFromOpponent, continueAfterScore]);
 
   // ---- Online sync: send SCORE_UPDATE after physics completes --------------
 
@@ -576,9 +596,14 @@ export default function BilliardsPage() {
           balls: state.balls.map((b) => ({ id: b.id, x: b.pos.x, y: b.pos.y })),
         });
       }
+      // Apply deferred SCORE_UPDATE that arrived during physics animation
+      if (pendingSyncRef.current && isOnlineMode) {
+        syncFromOpponent(pendingSyncRef.current);
+        pendingSyncRef.current = null;
+      }
     }
     prevPhaseRef.current = state.phase;
-  }, [state.phase, state.scores, state.currentPlayer, isOnlineMode, myPlayerIndex, online]);
+  }, [state.phase, state.scores, state.currentPlayer, isOnlineMode, myPlayerIndex, online, syncFromOpponent]);
 
   // ---- Render: Online mode setup / lobby -----------------------------------
 
