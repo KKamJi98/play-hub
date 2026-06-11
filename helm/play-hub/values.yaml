@@ -32,7 +32,9 @@ backend:
       memory: 512Mi
 
 ingress:
-  enabled: true
+  # 외부 노출은 KKamJi98/helm-charts 의 charts/envoy-gateway HTTPRoute 가 담당
+  # (/api, /ws -> backend, / -> frontend 라우팅 동일 유지)
+  enabled: false
   className: nginx
   host: play-hub.kkamji.net
   tls:
