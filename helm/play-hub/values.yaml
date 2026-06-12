@@ -47,3 +47,12 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+
+# Gateway API HTTPRoute (templates/httproute.yaml) - ingress 대체.
+route:
+  enabled: true
+  host: play-hub.kkamji.net
+  parentRef:
+    name: kkamji
+    namespace: envoy-gateway-system
+    sectionName: https
